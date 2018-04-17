@@ -1,0 +1,81 @@
+
+# IC-FTMS example
+{
+  "measurement": {
+    "01_UK49_CA_13C6Glc_slice-cells-polar-IC-FTMS_A-(S)-Methylmalonic-13C0[-H+]-": {
+      "adduct": "[-H+]-",
+      "assignment": "(S)-Methylmalonic-13C0[-H+]-",
+      "assignment%method": "directly to standard",
+      "compound": "(S)-Methylmalonic",
+      "corrected_mz": "101.02442",
+      "corrected_mz%type": "reference and adduct corrected",
+      "corrected_mz%units": "daltons/charge",
+      "formula": "C4H6O3",
+      "id": "01_UK49_CA_13C6Glc_slice-cells-polar-IC-FTMS_A-(S)-Methylmalonic-13C0[-H+]-",
+      "intensity": "180575.726269",
+      "intensity%type": "normalized corrected peak area",
+      "isotopologue": "13C0",
+      "isotopologue%type": "13C",
+      "protocol.id": "IC-FTMS2",
+      "raw_intensity": "172697.6566",
+      "raw_intensity%type": "spectrometer peak area",
+      "retention_time": "2.57",
+      "retention_time%units": "min",
+      "sample.id": "01_UK49_CA_13C6Glc_slice-cells-polar-IC-FTMS_A"
+    },
+    "<unique_sample_metabolite_combined_id>": {
+      "adduct": "[-H+]-",
+      "assignment": "(S)-Methylmalonic-13C4[-H+]-",
+      "assignment%method": "indirectly to standard",
+      "compound": "(S)-Methylmalonic",
+      "corrected_mz": "105.03784",
+      "corrected_mz%type": "reference and adduct corrected",
+      "corrected_mz%units": "daltons/charge",
+      "formula": "C4H6O3",
+      "id": "<unique_sample_metabolite_combined_id>",
+      "intensity": "3748268.20527",
+      "intensity%type": "normalized corrected peak area",
+      "isotopologue": "13C4",
+      "isotopologue%type": "13C",
+      "protocol.id": "IC-FTMS2",
+      "raw_intensity": "3748268.208",
+      "raw_intensity%type": "spectrometer peak area",
+      "retention_time": "2.57",
+      "retention_time%units": "min",
+      "sample.id": "<sample_id>"
+    },
+...
+}
+
+# SMIRFE assigned example
+{
+  "measurement": {
+    "01_UK49_CA_13C6Glc_slice-cells-polar-FTMS_A-(S)-Methylmalonic-13C0[-H+]-": {
+      "adduct": "[-H+]-", # from EMF
+      "assignment": <IMF+adduct>, # IMF directly
+      "assignment%method": <SMIRFE_assignment_type>, # Assignments:Type
+      "assignment%evalue": <assignment_evalue>, # IMF E-Value
+      "compound": <IMF>, # the current IMF has adduct directly embedded, need to remove it??
+      "corrected_mz": "101.02442", # ObservedMZ - correction value
+      "corrected_mz%type": "LOESS corrected",
+      "corrected_mz%units": "daltons/charge",
+      "raw_mz": "101.02442", # ObservedMZ:Mean
+      "raw_mz%type": "raw mz",
+      "raw_mz%units": "daltons/charge",
+      "raw_mz%std": <raw_mz_std>, # ObservedMZ:SD
+      "peak_id" : <peak_id>, #?????
+      "assignment_mz": "101.02442", # Assigned M/Z
+      "assignment_mz%type": "mz of assignment",
+      "assignment_mz%units": "daltons/charge",
+      "formula": "C4H6O3", # EMF
+      "id": "01_UK49_CA_13C6Glc_slice-cells-polar-FTMS_A-(S)-Methylmalonic-13C0[-H+]-",
+      "intensity": "180575.726269", # Height:Mean
+      "intensity%type": "characterized peak height",
+      "intensity%std": <intensity_std>, # Height:SD
+      "isotopologue": "13C0",
+      "isotopologue%type": "13C",
+      "protocol.id": "FTMS2",
+      "sample.id": "01_UK49_CA_13C6Glc_slice-cells-polar-FTMS_A"
+    },
+...
+}
