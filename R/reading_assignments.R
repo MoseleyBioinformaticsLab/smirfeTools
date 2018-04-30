@@ -177,11 +177,30 @@ clean_imfpeak_matrix <- function(imf_2_peaks, n = 1){
   imf_2_peaks
 }
 
-filter_extracted <- function(keep_imfs, extracted_data){
-  filter_vars <- c("height", "peaks", "emf", "type")
+filter_extracted <- function(keep_imfs, extracted_data, imf_2_imf){
+  # these ones are simple to extract
+  filter_vars <- c("height", "peaks", "type")
   extracted_data[filter_vars] <- purrr::map(extracted_data[filter_vars], function(in_var){
     in_var[keep_imfs, ]
   })
+
+  # but emf needs some more work
+  names(imf_2_imf) <- keep_imfs
+
+  emfs <- extracted_data$emf
+  emfs2 <- emfs[keep_imfs, ]
+
+  for (isample in colnames(emfs)) {
+    for (imf in keep_imfs) {
+      out_emfs <- unique(unlist(emfs[imf_2_imf[[imf]], isample]))
+      if (!is.null(out_emfs)) {
+        emfs2[imf, isample][[1]] <- out_emfs
+      }
+
+    }
+  }
+
+  extracted_data$emf <- emfs2
   extracted_data
 }
 
@@ -235,7 +254,7 @@ find_duplicate_peaks <- function(extracted_data, .pb = NULL){
   null_imfs <- purrr::map_lgl(all_imfs$others, is.null)
   all_imfs <- all_imfs[!null_imfs, ]
 
-  extracted_data2 <- filter_extracted(all_imfs$imf, extracted_data)
+  extracted_data2 <- filter_extracted(all_imfs$imf, extracted_data, all_imfs$others)
   extracted_data2$imf_2_imf <- all_imfs$others
   extracted_data2
 }
