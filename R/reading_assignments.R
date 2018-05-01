@@ -20,6 +20,24 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
        sample = sample)
 }
 
+#' filter assignments
+#'
+#' Given an assignment, filter them based on particular criteria, like removing
+#' all of the secondary assignments, for example.
+#'
+#' @param assignment_table the data.frame of assignments
+#' @param remove_secondary_assignments should secondary assignments be removed?
+#'
+#' @return filtered data.frame
+#'
+#' @export
+filter_assignments <- function(assignment_table, remove_secondary = TRUE){
+  if (remove_secondary_assignments) {
+    assignment_table <- assignment_table[(assignment_table$Type %in% "Primary"), ]
+  }
+  assignment_table
+}
+
 #' choose a single peak
 #'
 #' Need to choose a single peak to associate with each IMF. This tries to make
@@ -79,7 +97,7 @@ one_peak_from_imfs <- function(peak_assignments){
 
 #' extract peaks
 #'
-#' To be computably useful, the peak information for each IMF needs to be in a
+#' To be computably useful, we need to associate each  the peak information for each IMF needs to be in a
 #' matrix type format. This takes a list of peak-IMF data.frames, and generates
 #' a list of matrices to hold the data, where the matrix has IMF rows and sample
 #' columns.
