@@ -41,6 +41,11 @@ create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf 
 
   peak_index <- 1
 
+  # makes it possible to reuse the variable names in other places where we
+  # need matching between this list and the assignments data.frame
+  mock_list <- vector("list", length = 2)
+  names(mock_list) <- c(sample_peak, imf)
+
   # maximum amount of peaks, likely much less, but this sets an upper bound for
   # us.
   sudo_peaks <- vector("list", length(unique(all_assignments[!all_assignments$grabbed, "sample_peak"])))
@@ -74,7 +79,10 @@ create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf 
       n_iter <- n_iter + 1
     }
     #print(n_iter)
-    sudo_peaks[[peak_index]] <- list(imfs = unique(all_imf_peak), peaks = unique(all_peak_imf))
+    tmp_list <- mock_list
+    tmp_list[[sample_peak]] <- unique(all_peak_imf)
+    tmp_list[[imf]] <- unique(all_imf_peak)
+    sudo_peaks[[peak_index]] <- tmp_list
 
     all_assignments[all_assignments[, imf] %in% all_imf_peak, "grabbed"] <- TRUE
     peak_index <- peak_index + 1
