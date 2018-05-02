@@ -15,10 +15,76 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
   }
   tmp_list <- jsonlite::fromJSON(smirfe_assignment, simplifyVector = FALSE)
   sample <- gsub(".json.output", "", basename(smirfe_assignment))
+
+  assignments <- get_assigned_peak_info(tmp_list$Peaks)
+  assignments$sample <- sample
+  assignments$sample_peak <- paste0(assignments$sample, "_", assignments$peak_id)
   list(tic = tmp_list$TotalIntensity$Value,
-       assignments = get_assigned_peak_info(tmp_list$Peaks),
+       assignments = assignments,
        sample = sample)
 }
+
+#' create pseudo peak
+#'
+#' Given a master table of assignments, creates a set of "pseudo" peaks
+#' that each contain the set of `IMF`s and the `sample_peak` identifiers
+#' to pull out of a master table of peak assignments.
+#'
+#' @param all_assignments the table of all assignments from all samples
+#' @param sample_peak which variable holds the sample peak
+#' @param imf which variable holds the IMF information
+#'
+#' @export
+#' @return list of pseudo peaks
+create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf = "IMF"){
+  all_assignments$grabbed <- FALSE
+
+  peak_index <- 1
+
+  # maximum amount of peaks, likely much less, but this sets an upper bound for
+  # us.
+  sudo_peaks <- vector("list", length(unique(all_assignments[!all_assignments$grabbed, "sample_peak"])))
+
+  # while there is something grab, go in and get the first peak. We then grab
+  # the IMFs for that sample peak, then all the sample peaks for those IMFs,
+  # continuing until the set of IMFs and sample peaks no longer change.
+  #
+  # This should be equivalent to doing set intersections + union across a list
+  # of IMFs for sample peaks, but this is much, much faster than checking all
+  # of the sample peaks
+  while (sum(!all_assignments$grabbed) > 0) {
+    tmp_peak <- unique(all_assignments[!all_assignments$grabbed, sample_peak])[1]
+    tmp_imf <- all_assignments[all_assignments[, sample_peak] %in% tmp_peak, imf]
+
+    all_peak_imf <- unique(all_assignments[all_assignments[, imf] %in% tmp_imf, sample_peak])
+    all_imf_peak <- unique(all_assignments[all_assignments[, sample_peak] %in% all_peak_imf, imf])
+
+    match_peaks <- FALSE
+
+    n_iter <- 1
+    while (!match_peaks) {
+      all_peak_imf_2 <- unique(all_assignments[all_assignments[, imf] %in% all_imf_peak, sample_peak])
+      all_imf_peak_2 <- unique(all_assignments[all_assignments[, sample_peak] %in% all_peak_imf_2, imf])
+
+      match_peaks <- isTRUE(all.equal(all_peak_imf_2, all_peak_imf)) &&
+        isTRUE(all.equal(all_imf_peak_2, all_imf_peak))
+
+      all_peak_imf <- all_peak_imf_2
+      all_imf_peak <- all_imf_peak_2
+      n_iter <- n_iter + 1
+    }
+    #print(n_iter)
+    sudo_peaks[[peak_index]] <- list(imfs = unique(all_imf_peak), peaks = unique(all_peak_imf))
+
+    all_assignments[all_assignments[, imf] %in% all_imf_peak, "grabbed"] <- TRUE
+    peak_index <- peak_index + 1
+
+  }
+  null_sudos <- purrr::map_lgl(sudo_peaks, is.null)
+  sudo_peaks <- sudo_peaks[!null_sudos]
+  sudo_peaks
+}
+
 
 #' filter assignments
 #'
@@ -31,7 +97,7 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
 #' @return filtered data.frame
 #'
 #' @export
-filter_assignments <- function(assignment_table, remove_secondary = TRUE){
+filter_assignments <- function(assignment_table, remove_secondary_assignments = TRUE){
   if (remove_secondary_assignments) {
     assignment_table <- assignment_table[(assignment_table$Type %in% "Primary"), ]
   }
@@ -95,6 +161,164 @@ one_peak_from_imfs <- function(peak_assignments){
   all_peaks
 }
 
+peaks_2_imfs <- function(assignment_table){
+  split(assignment_table, assignment_table$peak_id)
+}
+
+imfs_2_peaks <- function(assignment_table){
+  split(assignment_table, assignment_table$IMF)
+}
+
+count_peaks <- function(assignment_table){
+  length(unique)
+}
+
+find_within_sample_peaks <- function(assignment_table){
+  split_imfs <- imfs_2_peaks(assignment_table)
+
+  n_peak <- purrr::map_int(split_imfs, function(x){length(unique(x$peak_id))})
+
+  if (sum(n_peak > 1) == 0) {
+    out_peaks <- peaks_2_imfs(assignment_table)
+    names(out_peaks) <- NULL
+    return(out_peaks)
+  } else {
+    # do something fancy here
+    warning("multiple peaks / IMF observed")
+  }
+
+}
+
+#' within id
+#'
+#' for a list of samples, generate a unique group id within each sample
+#'
+#' @param sample_data list of sample data.frames
+#' @param uniq_id which column that defines a unique peak
+#' @param merge_id which column to grab for merging on later
+#'
+#' @export
+#' @return list of new data.frames
+within_id <- function(sample_data, uniq_id = "peak_id", merge_id = "IMF"){
+  lapply(sample_data, function(in_sample){
+    grab_id <- unique(in_sample[, uniq_id])
+    out_grab <- seq_along(grab_id)
+    names(out_grab) <- grab_id
+    tmp_data <- in_sample[, c(uniq_id, merge_id)]
+    names(tmp_data) <- c("uniq_id", "merge_id")
+    tmp_data$group_id <- 0
+    tmp_data$sample_loc <- 0
+    for (in_id in grab_id){
+      all_loc <- tmp_data[, "uniq_id"] %in% in_id
+      tmp_data[all_loc, "group_id"] <- out_grab[as.character(in_id)]
+      tmp_data[all_loc, "sample_loc"] <- which(all_loc)
+    }
+    tmp_data
+  })
+}
+
+#' generate master goups
+#'
+#' given the groups generated by \code{within_id}, create a master list of groups
+#' (peaks) that are present across samples
+#'
+#' @param within_groups list of data.frames from \code{within_id}
+#' @param progress tell the user that data is being processed (default = TRUE)
+#'
+#' @export
+#' @return data.frame of master groups
+generate_master <- function(within_groups, .pb = NULL){
+  master_groups <- within_groups[[1]]
+
+  not_equal <- TRUE
+  round_count <- 1
+  init_group <- master_groups
+
+  while (not_equal) {
+    if (!is.null(.pb)) {
+      tmp_pb <- .pb$clone(deep = TRUE)
+    } else {
+      tmp_pb <- NULL
+    }
+    for (i_sample in seq(1, length(within_groups))) {
+
+      knitrProgressBar::update_progress(tmp_pb)
+
+
+      split_merge <- split(within_groups[[i_sample]][, "merge_id"], within_groups[[i_sample]][, "group_id"])
+
+      for (i_split in seq(1, length(split_merge))) {
+        #print(paste("split: ", i_split, sep = ""))
+        tmp_split <- split_merge[[i_split]]
+        loc_match <- match(tmp_split, master_groups[, "merge_id"])
+
+        na_index <- which(is.na(loc_match))
+        na_id <- tmp_split[na_index]
+        loc_match <- loc_match[-na_index]
+
+        # Three scenarios:
+        # 1: none matching, need to add a new group, incrementing the group id
+        # 2: some matching, some not, need to add the ones that were not previously there
+        # to the same group
+        # 3: some matching to two groups, need to collapse the two in master group into
+        # one group
+
+        if ((length(loc_match) == 0) & (length(na_index) > 0)) {
+
+          new_grp_id <- max(master_groups$group_id) + 1
+          master_groups <- rbind(master_groups,
+                                 data.frame(uniq_id = NA, merge_id = na_id,
+                                            group_id = new_grp_id, sample_loc = NA,
+                                            stringsAsFactors = FALSE))
+
+        } else if ((length(loc_match) > 0) & (length(na_index) > 0)) {
+          master_grp_id <- master_groups[loc_match, "group_id"]
+          uniq_grp_id <- unique(master_grp_id)
+
+          if (length(uniq_grp_id) > 1) {
+            #stop("merging groups")
+            master_loc <- master_groups$group_id %in% uniq_grp_id
+            new_grp_id <- max(master_groups$group_id) + 1
+            master_groups$group_id[master_loc] <- new_grp_id
+            #message(cat("Merging groups", uniq_grp_id, sep =" "))
+
+          } else {
+            new_grp_id <- uniq_grp_id
+          }
+
+          master_groups <- rbind(master_groups,
+                                 data.frame(uniq_id = NA, merge_id = na_id,
+                                            group_id = new_grp_id, sample_loc = NA,
+                                            stringsAsFactors = FALSE))
+        }
+      }
+    }
+    # check if what we have now is the same as before
+    # if there are no changes, then we can stop
+    # otherwise we loop through the samples again, and see
+    # if anything changes
+    if (identical(master_groups, init_group)) {
+      not_equal <- FALSE
+    } else {
+      init_group <- master_groups
+      round_count <- round_count + 1
+    }
+  }
+
+  # if (progress) {
+  #   message("Done!")
+  # }
+
+  # finally, split on the group id, and then renumber them and do a proper make.names
+  # turns out we don't use the uniq_id or sample_loc anywhere later, so we can
+  # discard them. All matching in samples is done using the merge_id
+  split_groups <- split(master_groups$merge_id, master_groups$group_id)
+  names(split_groups) <- make.names(seq_len(length(split_groups)))
+
+  split_groups
+}
+
+
 #' extract peaks
 #'
 #' To be computably useful, we need to associate each  the peak information for each IMF needs to be in a
@@ -113,6 +337,27 @@ extract_peaks <- function(assignment_list, .pb = NULL){
   get_tic <- function(x){x$tic}
   get_sample <- function(x){x$sample}
   names(assignment_list) <- purrr::map_chr(assignment_list, get_sample)
+
+  filtered_assignments <- purrr::map(assignment_list, function(x){
+    filter_assignments(x$assignments)
+  })
+
+  n_peaks <- purrr::map_int(filtered_assignments, function(x){
+    length(unique(x$peak_id))
+  })
+  total_peaks <- round(sum(n_peaks) * .9)
+
+  peak_list <- vector("list", total_peaks)
+
+  possible_peaks <- find_within_sample_peaks(filtered_assignments[[1]])
+
+  peak_imf_map <- purrr::map(possible_peaks, function(x){
+    x$IMF
+  })
+
+  for (isample in filtered_assignments) {
+
+  }
 
   all_imfs <- purrr::map(assignment_list, get_imfs)
   all_imfs <- unique(unlist(all_imfs))
