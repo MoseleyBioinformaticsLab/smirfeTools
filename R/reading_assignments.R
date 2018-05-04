@@ -38,15 +38,34 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
 extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak", imf = "IMF"){
   all_assignments <- purrr::map_df(assigned_data, "assignments")
 
+  # remove IMFs that were only reported once across all peaks
+  #
+  # 2 - step process:
+  #   1 - Those IMFs that really do show up only once
+  #   2 - Those IMFs that are reported twice due to having two EMFs
+  #
+  # First, IMF was only reported once
   all_imf <- unique(all_assignments[, imf])
 
   n_peak_imf <- purrr::map_int(all_imf, function(in_imf){
     sum(all_assignments[, imf] %in% in_imf)
   })
 
-  keep_imf <- all_imf[n_peak_imf > 1]
+  keep_imf_1 <- all_imf[n_peak_imf > 1]
 
-  all_assignments <- all_assignments[all_assignments[, imf] %in% keep_imf, ]
+  all_assignments <- all_assignments[all_assignments[, imf] %in% keep_imf_1, ]
+
+  # Second, reported for multiple EMFs, can fake this by checking if there
+  # is a single sample_peak
+  split_imf_assignments <- split(all_assignments, all_assignments[, imf])
+
+  keep_imf_2 <- purrr::map_lgl(split_imf_assignments, function(in_imf){
+    (nrow(in_imf) > 1) && (length(unique(in_imf[, sample_peak])) > 1)
+  })
+
+  split_imf_assignments <- split_imf_assignments[keep_imf_2]
+
+  all_assignments <- purrr::map_df(split_imf_assignments, function(x){x})
 
   sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
 
