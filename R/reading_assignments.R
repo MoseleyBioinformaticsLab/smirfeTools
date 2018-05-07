@@ -172,6 +172,8 @@ examine_imfs <- function(sudo_peaks, all_assignments,
     imf_stats
   })
 
+  n_imf_2 <- purrr::map_int(multi_imf_data, function(x){sum(x$choose)})
+  all_n_imf <- c(n_imf[n_imf == 1], n_imf_2)
 
 
 }
