@@ -53,11 +53,11 @@ extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak", im
 
   keep_imf_1 <- all_imf[n_peak_imf > 1]
 
-  all_assignments <- all_assignments[all_assignments[, imf] %in% keep_imf_1, ]
+  all_assignments_use_correspondence <- all_assignments[all_assignments[, imf] %in% keep_imf_1, ]
 
   # Second, reported for multiple EMFs, can fake this by checking if there
   # is a single sample_peak
-  split_imf_assignments <- split(all_assignments, all_assignments[, imf])
+  split_imf_assignments <- split(all_assignments_use_correspondence, all_assignments_use_correspondence[, imf])
 
   keep_imf_2 <- purrr::map_lgl(split_imf_assignments, function(in_imf){
     (nrow(in_imf) > 1) && (length(unique(in_imf[, sample_peak])) > 1)
@@ -65,9 +65,9 @@ extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak", im
 
   split_imf_assignments <- split_imf_assignments[keep_imf_2]
 
-  all_assignments <- purrr::map_df(split_imf_assignments, function(x){x})
+  all_assignments_use_correspondence <- purrr::map_df(split_imf_assignments, function(x){x})
 
-  sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
+  sudo_peaks <- create_sudo_peaks(all_assignments_use_correspondence, sample_peak = sample_peak, imf = imf)
 
 
 }
