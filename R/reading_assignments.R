@@ -31,51 +31,308 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
 #' @param assigned_data a list of assignments created from `read_smirfe_assignments`
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
+#' @param e_value the e-values
+#' @param emf which variable holds the EMF information
+#' @param sample which variable holds the sample
+#' @param observed_mz which variable holds the observed M/Z
+#' @param assigned_mz which variable holds the assigned M/Z
+#' @param height which variable holds the height / intensity
+#' @param other_cols which other columns should be kept?
+#' @param progress should the progress be shown?
 #'
 #' @export
 #'
 #' @return list of matrices
-extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak", imf = "IMF"){
+extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak",
+                                  imf = "IMF", e_value = "IMF.E.Value",
+                                  emf = "EMF", sample = "sample",
+                                  observed_mz = "ObservedMZ.Mean",
+                                  assigned_mz = "Assigned.M.Z",
+                                  height = "Height.Mean",
+                                  other_cols = c("Adduct_IMF", "Adduct", "EMF2"),
+                                  progress = TRUE){
   all_assignments <- purrr::map_df(assigned_data, "assignments")
 
-  # remove IMFs that were only reported once across all peaks
-  #
-  # 2 - step process:
-  #   1 - Those IMFs that really do show up only once
-  #   2 - Those IMFs that are reported twice due to having two EMFs
-  #
-  # First, IMF was only reported once
-  all_imf <- unique(all_assignments[, imf])
+  message("Creating pseudo peaks ...")
+  sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
 
-  n_peak_imf <- purrr::map_int(all_imf, function(in_imf){
-    sum(all_assignments[, imf] %in% in_imf)
-  })
+  all_e_value <- all_assignments[, e_value]
+  min_e_value <- min(all_e_value[all_e_value > 0], na.rm = TRUE)
+  min_e_value <- min_e_value * 0.1
 
-  keep_imf_1 <- all_imf[n_peak_imf > 1]
+  all_samples <- unique(all_assignments[, sample])
+  peak_matrix <- matrix(NA, nrow = length(sudo_peaks), ncol = length(all_samples))
+  colnames(peak_matrix) <- all_samples
+  rownames(peak_matrix) <- paste0("X", seq(1, length(sudo_peaks)))
 
-  all_assignments_use_correspondence <- all_assignments[all_assignments[, imf] %in% keep_imf_1, ]
+  height_matrix <- peak_matrix
+  mz_matrix <- peak_matrix
+  imf_matrix <- matrix(vector("list", 1), nrow = length(sudo_peaks), ncol = length(all_samples))
+  colnames(imf_matrix) <- all_samples
+  rownames(imf_matrix) <- rownames(peak_matrix)
+  emf_matrix <- imf_matrix
 
-  # Second, reported for multiple EMFs, can fake this by checking if there
-  # is a single sample_peak
-  split_imf_assignments <- split(all_assignments_use_correspondence, all_assignments_use_correspondence[, imf])
+  peak_2_imf <- vector("list", length(sudo_peaks))
+  names(peak_2_imf) <- rownames(peak_matrix)
+  peak_2_peak <- peak_2_imf
 
-  keep_imf_2 <- purrr::map_lgl(split_imf_assignments, function(in_imf){
-    (nrow(in_imf) > 1) && (length(unique(in_imf[, sample_peak])) > 1)
-  })
+  message("Extracting data ...")
 
-  split_imf_assignments <- split_imf_assignments[keep_imf_2]
+  if (progress && require(knitrProgressBar)) {
+    pb <- knitrProgressBar::progress_estimated(length(sudo_peaks))
+    do_update <- TRUE
+  }
 
-  all_assignments_use_correspondence <- purrr::map_df(split_imf_assignments, function(x){x})
+  for (ipeak in seq_along(sudo_peaks)) {
+    if (do_update) {
+      knitrProgressBar::update_progress(pb)
+    }
 
-  sudo_peaks <- create_sudo_peaks(all_assignments_use_correspondence, sample_peak = sample_peak, imf = imf)
 
+    tmp_assignment <- all_assignments[all_assignments[, imf] %in% sudo_peaks[[ipeak]][[imf]], ]
+    use_imfs <- choose_imfs(tmp_assignment, sample_peak = sample_peak,
+                            imf = imf, sample = sample, e_value = e_value,
+                            min_e_value = min_e_value)
+    peak_2_imf[[ipeak]] <- use_imfs
+
+    imf_mz <- unique(tmp_assignment[tmp_assignment[, imf] %in% use_imfs, assigned_mz])
+    peak_data <- choose_single_peak(tmp_assignment, use_imfs, imf_mz, imf = imf,
+                                    sample_peak = sample_peak, sample = sample)
+
+    use_peaks <- unique(peak_data[, sample_peak])
+    peak_2_peak[[ipeak]] <- use_peaks
+
+    peak_mz <- extract_single(peak_data, use_var = observed_mz, sample_peak = sample_peak, sample = sample)
+    mz_matrix[ipeak, names(peak_mz)] <- peak_mz
+
+    peak_height <- extract_single(peak_data, use_var = height,
+                                  sample_peak = sample_peak, sample = sample)
+    height_matrix[ipeak, names(peak_height)] <- peak_height
+
+    peak_imf <- extract_multiple(peak_data, use_var = imf, sample = sample)
+    imf_matrix[ipeak, names(peak_imf)] <- peak_imf
+    peak_emf <- extract_multiple(peak_data, use_var = emf, sample = sample)
+    emf_matrix[ipeak, names(peak_emf)] <- peak_emf
+  }
+
+  n_imf <- purrr::map_int(peak_2_imf, length)
+  all_imf <- data.frame(peak = rep(names(peak_2_imf), n_imf), imf = unlist(peak_2_imf),
+                        stringsAsFactors = FALSE)
+  names(all_imf)[2] <- imf
+  all_imf <- dplyr::left_join(all_imf, unique(all_assignments[, c(imf, emf, other_cols)]), by = imf)
+
+  return(list(mz = mz_matrix, height = height_matrix,
+              imf = imf_matrix, emf = emf_matrix,
+              peak_info = all_imf))
+}
+
+extract_single <- function(assignment_data, use_var = NULL, sample_peak = "sample_peak", sample = "sample"){
+
+  if (is.null(use_var)) {
+    stop("The variable to extract (use_var) must be defined!")
+  }
+
+  tmp_data <- unique(assignment_data[, c(use_var, sample_peak, sample)])
+
+  if (nrow(tmp_data) == length(unique(tmp_data[, sample]))) {
+    out_data <- tmp_data[, use_var]
+    names(out_data) <- tmp_data[, sample]
+  } else {
+    warning("Data doesn't match samples!")
+    out_data <- NA
+  }
+
+  out_data
 
 }
 
-#' look at IMFs
+extract_multiple <- function(assignment_data, use_var = NULL, sample = "sample"){
+
+  if (is.null(use_var)) {
+    stop("The variable to extract (use_var) must be defined!")
+  }
+
+  tmp_data <- split(assignment_data[, use_var], assignment_data[, sample])
+  tmp_data
+}
+
+#' choose a peak
 #'
-#' Check how many peaks have a single IMF that seems to be a clear winner, vs
-#' how many seem to definitively have multiple IMFs.
+#' When there are multiple peaks in a sample, we need to choose one based on
+#' the chosen representative IMF. See **Details** for more information on how
+#' that decision is made.
+#'
+#' @param assignment_data the data.frame of assignment data
+#' @param keep_imf which IMF was chosen from the assignments
+#' @param imf_mz the assigned IMF M/Z
+#' @param imf which variable are the IMFs listed
+#' @param sample_peak which variable contains the sample peak information
+#' @param sample which variable has the sample information
+#'
+#' @details Given the `assignment_data` and which IMF to keep, picks which
+#' peak should be kept for a given sample. This is made in order of:
+#' 1. Does one of the peaks have a **Primary** assignment matching the IMF?
+#' 1. Does one of the peaks have a **Secondary** assignment matching the IMF?
+#' 1. Which peak has the **smallest** M/Z difference to the chosen IMF?
+#'
+#' @export
+#'
+#' @return data.frame of assignment data, with a single peak in each sample.
+choose_single_peak <- function(assignment_data, keep_imf, imf_mz = NULL, imf = "IMF",
+                               sample_peak = "sample_peak", sample = "sample"){
+  split_sample <- split(assignment_data, assignment_data[, sample])
+
+  n_peak <- purrr::map_int(split_sample, function(x){length(unique(x[, sample_peak]))})
+
+  if (all(n_peak == 1)) {
+    return(assignment_data)
+  }
+
+  split_multi <- split_sample[n_peak > 1]
+
+  decide_peak <- function(sample_data, keep_imf, imf_mz = NULL, imf = "IMF",
+                          sample_peak = "sample_peak", sample = "sample"){
+    match_imf <- sample_data[, imf] %in% keep_imf
+
+    sample_peak_match_imf <- unique(sample_data[match_imf, sample_peak])
+
+    # assuming there were matches to the chosen IMF
+    # return the single matching peak (hopefully)
+    if ((length(sample_peak_match_imf) == 1) && (all(!is.na(sample_peak_match_imf)))) {
+      return(sample_data[(sample_data[, sample_peak] %in% sample_peak_match_imf), ])
+
+
+    } else if ((length(sample_peak_match_imf) > 1) && (all(!is.na(sample_peak_match_imf)))) {
+      use_loc <- (sample_data[, sample_peak] %in% sample_peak_match_imf) & match_imf
+      tmp_data <- sample_data[use_loc, ]
+      type_matches <- tmp_data[, "Type"]
+
+      # return the one that matched with a "Primary" assignment
+      if ((length(unique(type_matches)) == 2) && (all(!is.na(type_matches)))) {
+        use_peak <- tmp_data[type_matches %in% "Primary", imf]
+        return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
+      } else if ((length(unique(type_matches)) == 1) && (all(!is.na(type_matches)))) {
+        # return the one that had the smallest difference in mass
+        mz_diff <- abs(tmp_data$ObservedMZ.Mean - tmp_data$Assigned.M.Z)
+        use_peak <- tmp_data[which.min(mz_diff), sample_peak]
+        return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
+      }
+
+    }
+
+    # No IMF matches, now what??
+    # do it based on closest overall m/z diff to the chosen IMF, which was also
+    # passed in, just in case
+    mz_diff <- purrr::map_df(split(sample_data, sample_data[, sample_peak]), function(in_peak){
+      tmp_frame <- data.frame(mz_diff = abs(in_peak$ObservedMZ.Mean - imf_mz))
+      tmp_frame[[2]] <- in_peak[, sample_peak]
+      names(tmp_frame)[2] <- sample_peak
+      tmp_frame
+    })
+    use_peak <- mz_diff[which.min(mz_diff$mz_diff), sample_peak]
+
+    return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
+  }
+
+  multi_data <- purrr::map(split_multi, decide_peak, keep_imf, imf_mz,
+                           imf = imf, sample_peak = sample_peak, sample = sample)
+  all_data <- purrr::map_df(c(multi_data, split_sample[n_peak == 1]), function(x){x})
+
+  all_data
+}
+
+
+#' decide on IMFs
+#'
+#' given a set of assignment data, decide which set of IMFs should
+#' be reported.
+#'
+#' @param assignment_data data.frame of assignment data
+#' @param sample_peak what defines a sample_peak combination
+#' @param imf which is the imf variable
+#' @param sample what is the sample
+#' @param e_value which is the e-value column?
+#' @param min_e_value what is the minimum e-value to use?
+#'
+choose_imfs <- function(assignment_data, sample_peak = "sample_peak", imf = "IMF",
+sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
+
+  # easy cases, there is only 1 IMF
+  if (nrow(assignment_data) == 1) {
+    return(assignment_data[, imf])
+  }
+
+  if (length(unique(assignment_data[, imf])) == 1) {
+    return(assignment_data[, imf][1])
+  }
+
+  # then there are multiple IMFs to choose from
+  assignment_single_e_value <- pick_single_evalue(assignment_data,
+                                                  sample_peak = sample_peak,
+                                                  imf = imf,
+                                                  sample = sample,
+                                                  e_value = e_value)
+
+  split_assignment_data <- split(assignment_single_e_value, assignment_single_e_value[, imf])
+  n_sample <- length(unique(assignment_single_e_value[, sample]))
+
+  imf_stats <- purrr::map_df(split_assignment_data, function(in_imf){
+    data.frame(imf = unique(in_imf[, imf]),
+               ratio = nrow(in_imf) / n_sample,
+               evalue = median_e_values(in_imf[, e_value], min_e_value),
+               stringsAsFactors = FALSE)
+  })
+
+  # logic:
+  # case 1: everything is possible:
+  #   * all ratios of max ratio to everything else is < 0.2
+  #   * all differences of min(log10(evalue)) to everything else is < 3, so
+  #   everything is valid.
+  # case 2: multiple valid IMFs:
+  #   * max ratio to next ratio is > 0.2
+  #   * there is a difference in log10(evalue)'s > 3
+
+
+  max_ratio_value <- max(imf_stats$ratio)
+  ratio_diffs <- abs(max_ratio_value - imf_stats$ratio)
+
+  out_ratio <- !(ratio_diffs > 0.2)
+
+  min_evalue <- min(imf_stats$evalue)
+  evalue_diffs <- abs(log10(min_evalue) - log10(imf_stats$evalue))
+  out_evalue <- !(evalue_diffs > 3)
+
+  # if we've got nothing, try the next highest ratio
+  if (sum(out_evalue & out_ratio) == 0) {
+    max_ratio_value <- max(imf_stats[imf_stats$ratio != max_ratio_value, "ratio"])
+    ratio_diffs <- abs(max_ratio_value - imf_stats$ratio)
+
+    out_ratio <- !(ratio_diffs > 0.2)
+  }
+
+  imf_stats$choose <- out_evalue & out_ratio
+
+  return(imf_stats[imf_stats$choose, "imf"])
+
+}
+
+pick_single_evalue <- function(assignment_data, sample_peak = "sample_peak", imf = "IMF",
+                               sample = "sample", e_value = "IMF.E.Value"){
+  split_imf <- split(assignment_data, assignment_data[, c(imf, sample)])
+
+  assignment_data_single <- purrr::map_df(split_imf, function(x){
+    nrow_unique <- nrow(unique(x[, c(imf, e_value)]))
+    if (nrow_unique > 1) {
+      return(x[which.min(x[, e_value]), ])
+    } else {
+      return(x[1, ])
+    }
+  })
+}
+
+#' decide the IMFs
+#'
+#'
 #'
 #' @param sudo_peaks the sudo peaks list generated by `create_sudo_peaks`
 #' @param all_assignments the assignments
@@ -86,7 +343,7 @@ extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak", im
 #' @export
 #' @return imf info list
 #'
-examine_imfs <- function(sudo_peaks, all_assignments,
+decide_imfs <- function(sudo_peaks, all_assignments,
                          sample_peak = "sample_peak", imf = "IMF",
                          sample = "sample"){
 
@@ -204,14 +461,14 @@ median_e_values <- function(e_values, min_e_value = 1e-18){
 #' that each contain the set of `IMF`s and the `sample_peak` identifiers
 #' to pull out of a master table of peak assignments.
 #'
-#' @param all_assignments the table of all assignments from all samples
+#' @param in_assignments the table of all assignments from all samples
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
 #'
 #' @export
 #' @return list of pseudo peaks
-create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf = "IMF"){
-  all_assignments$grabbed <- FALSE
+create_sudo_peaks <- function(in_assignments, sample_peak = "sample_peak", imf = "IMF"){
+  in_assignments$grabbed <- FALSE
 
   peak_index <- 1
 
@@ -222,7 +479,7 @@ create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf 
 
   # maximum amount of peaks, likely much less, but this sets an upper bound for
   # us.
-  sudo_peaks <- vector("list", length(unique(all_assignments[!all_assignments$grabbed, "sample_peak"])))
+  sudo_peaks <- vector("list", length(unique(in_assignments[!in_assignments$grabbed, sample_peak])))
 
   # while there is something grab, go in and get the first peak. We then grab
   # the IMFs for that sample peak, then all the sample peaks for those IMFs,
@@ -231,19 +488,19 @@ create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf 
   # This should be equivalent to doing set intersections + union across a list
   # of IMFs for sample peaks, but this is much, much faster than checking all
   # of the sample peaks
-  while (sum(!all_assignments$grabbed) > 0) {
-    tmp_peak <- unique(all_assignments[!all_assignments$grabbed, sample_peak])[1]
-    tmp_imf <- all_assignments[all_assignments[, sample_peak] %in% tmp_peak, imf]
+  while (sum(!in_assignments$grabbed) > 0) {
+    tmp_peak <- unique(in_assignments[!in_assignments$grabbed, sample_peak])[1]
+    tmp_imf <- in_assignments[in_assignments[, sample_peak] %in% tmp_peak, imf]
 
-    all_peak_imf <- unique(all_assignments[all_assignments[, imf] %in% tmp_imf, sample_peak])
-    all_imf_peak <- unique(all_assignments[all_assignments[, sample_peak] %in% all_peak_imf, imf])
+    all_peak_imf <- unique(in_assignments[in_assignments[, imf] %in% tmp_imf, sample_peak])
+    all_imf_peak <- unique(in_assignments[in_assignments[, sample_peak] %in% all_peak_imf, imf])
 
     match_peaks <- FALSE
 
     n_iter <- 1
     while (!match_peaks) {
-      all_peak_imf_2 <- unique(all_assignments[all_assignments[, imf] %in% all_imf_peak, sample_peak])
-      all_imf_peak_2 <- unique(all_assignments[all_assignments[, sample_peak] %in% all_peak_imf_2, imf])
+      all_peak_imf_2 <- unique(in_assignments[in_assignments[, imf] %in% all_imf_peak, sample_peak])
+      all_imf_peak_2 <- unique(in_assignments[in_assignments[, sample_peak] %in% all_peak_imf_2, imf])
 
       match_peaks <- isTRUE(all.equal(all_peak_imf_2, all_peak_imf)) &&
         isTRUE(all.equal(all_imf_peak_2, all_imf_peak))
@@ -258,7 +515,7 @@ create_sudo_peaks <- function(all_assignments, sample_peak = "sample_peak", imf 
     tmp_list[[imf]] <- unique(all_imf_peak)
     sudo_peaks[[peak_index]] <- tmp_list
 
-    all_assignments[all_assignments[, imf] %in% all_imf_peak, "grabbed"] <- TRUE
+    in_assignments[in_assignments[, imf] %in% all_imf_peak, "grabbed"] <- TRUE
     peak_index <- peak_index + 1
 
   }
