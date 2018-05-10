@@ -323,23 +323,34 @@ sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
   evalue_diffs <- abs(log10(min_evalue) - log10(imf_stats$evalue))
   out_evalue <- !(evalue_diffs > 3)
 
+  choose <- out_ratio & out_evalue
+
   # if we've got nothing, try the next highest ratio
-  if (sum(out_evalue & out_ratio) == 0) {
+  if (sum(choose) == 0) {
     max_ratio_value <- max(imf_stats[imf_stats$ratio != max_ratio_value, "ratio"])
     ratio_diffs <- abs(max_ratio_value - imf_stats$ratio)
 
     out_ratio <- !(ratio_diffs > 0.2)
+    choose <- out_ratio & out_evalue
   }
 
-  imf_stats$choose <- out_evalue & out_ratio
+  # if still nothing, do the | (technically, this should always get something)
+  if (sum(choose) == 0) {
+    choose <- out_ratio | out_evalue
+  }
 
-  return(imf_stats[imf_stats$choose, "imf"])
+  # but just in case, return everything if that is still nothing
+  if (sum(choose) == 0) {
+    choose <- rep(TRUE, nrow(imf_stats))
+  }
+
+  return(imf_stats[choose, "imf"])
 
 }
 
 pick_single_evalue <- function(assignment_data, sample_peak = "sample_peak", imf = "IMF",
                                sample = "sample", e_value = "IMF.E.Value"){
-  split_imf <- split(assignment_data, assignment_data[, c(imf, sample)])
+  split_imf <- split(assignment_data, paste0(assignment_data[, imf], assignment_data[, sample]))
 
   assignment_data_single <- purrr::map_df(split_imf, function(x){
     nrow_unique <- nrow(unique(x[, c(imf, e_value)]))
