@@ -99,6 +99,8 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   if (progress && require(knitrProgressBar)) {
     pb <- knitrProgressBar::progress_estimated(length(sudo_peaks))
     do_update <- TRUE
+  } else {
+    do_update <- FALSE
   }
 
   for (ipeak in seq_along(sudo_peaks)) {
