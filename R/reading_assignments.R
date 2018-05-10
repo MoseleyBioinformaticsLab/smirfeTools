@@ -26,6 +26,12 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
        sample = sample)
 }
 
+get_tic <- function(assigned_data){
+  tic <- purrr::map_dbl(assigned_data, "tic")
+  names(tic) <- purrr::map_chr(assigned_data, "sample")
+  tic
+}
+
 #' extract data
 #'
 #' Extract the data from a complete set of assignments.
@@ -135,7 +141,8 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
 
   return(list(mz = mz_matrix, height = height_matrix,
               imf = imf_matrix, emf = emf_matrix,
-              peak_info = all_imf))
+              peak_info = all_imf,
+              tic = get_tic(assigned_data)))
 }
 
 extract_single <- function(assignment_data, use_var = NULL, sample_peak = "sample_peak", sample = "sample"){
