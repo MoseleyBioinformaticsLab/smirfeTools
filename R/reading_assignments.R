@@ -371,11 +371,9 @@ median_e_values <- function(e_values, min_e_value = 1e-18){
   } else {
     e_values <- e_values[!is.na(e_values)]
   }
+  e_values[e_values == 0] <- min_e_value
   if (n_value < 15) {
     min_value <- min(e_values)
-    if (min_value == 0) {
-      min_value <- min_e_value
-    }
     return(min_value)
   } else {
     return(median(e_values))
