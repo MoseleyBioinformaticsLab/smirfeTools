@@ -6,6 +6,8 @@
 #' @param smirfe_assignment the set of assignment results
 #' @param .pb a progress bar object
 #'
+#' @importFrom jsonlite fromJSON
+#'
 #' @return list of tic, assignments, sample
 #' @export
 #'
@@ -29,6 +31,7 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
 #' Extract the data from a complete set of assignments.
 #'
 #' @param assigned_data a list of assignments created from `read_smirfe_assignments`
+#' @param remove_secondary remove the seconardy assignments? (default is TRUE)
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
 #' @param e_value the e-values
@@ -42,8 +45,12 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
 #'
 #' @export
 #'
-#' @return list of matrices
-extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak",
+#' @importFrom purrr map map_df map_int
+#' @importFrom dplyr left_join
+#'
+#' @return list of matrices and a data.frame
+extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
+                                  sample_peak = "sample_peak",
                                   imf = "IMF", e_value = "IMF.E.Value",
                                   emf = "EMF", sample = "sample",
                                   observed_mz = "ObservedMZ.Mean",
@@ -52,6 +59,11 @@ extract_assigned_data <- function(assigned_data, sample_peak = "sample_peak",
                                   other_cols = c("Adduct_IMF", "Adduct", "EMF2"),
                                   progress = TRUE){
   all_assignments <- purrr::map_df(assigned_data, "assignments")
+
+  if (remove_seconary) {
+    all_assignments <- all_assignments[all_assignments$Type %in% "Primary", ]
+  }
+
 
   message("Creating pseudo peaks ...")
   sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
@@ -464,6 +476,8 @@ median_e_values <- function(e_values, min_e_value = 1e-18){
 #' @param in_assignments the table of all assignments from all samples
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
+#'
+#' @importFrom purrr map_lgl
 #'
 #' @export
 #' @return list of pseudo peaks
