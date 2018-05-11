@@ -245,8 +245,8 @@ choose_single_peak <- function(assignment_data, keep_imf, imf_mz = NULL, imf = "
     # do it based on closest overall m/z diff to the chosen IMF, which was also
     # passed in, just in case
     mz_diff <- purrr::map_df(split(sample_data, sample_data[, sample_peak]), function(in_peak){
-      tmp_frame <- data.frame(mz_diff = abs(in_peak$ObservedMZ.Mean - imf_mz))
-      tmp_frame[[2]] <- in_peak[, sample_peak]
+      tmp_frame <- data.frame(mz_diff = abs(in_peak$ObservedMZ.Mean[1] - imf_mz))
+      tmp_frame[[2]] <- in_peak[1, sample_peak]
       names(tmp_frame)[2] <- sample_peak
       tmp_frame
     })
