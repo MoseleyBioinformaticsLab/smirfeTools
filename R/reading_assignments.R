@@ -71,8 +71,13 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   }
 
 
-  message("Creating pseudo peaks ...")
+  if (progress) message("Creating pseudo peaks ...")
+
+  sudo_start <- Sys.time()
   sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
+  sudo_end <- Sys.time()
+
+  if (progress) difftime(sudo_end, sudo_start)
 
   all_e_value <- all_assignments[, e_value]
   min_e_value <- min(all_e_value[all_e_value > 0], na.rm = TRUE)
@@ -94,7 +99,7 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   names(peak_2_imf) <- rownames(peak_matrix)
   peak_2_peak <- peak_2_imf
 
-  message("Extracting data ...")
+  if (progress) message("Extracting data ...")
 
   if (progress && require(knitrProgressBar)) {
     pb <- knitrProgressBar::progress_estimated(length(sudo_peaks))
