@@ -57,7 +57,7 @@ get_tic <- function(assigned_data){
 #' @return list of matrices and a data.frame
 extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
                                   sample_peak = "sample_peak",
-                                  imf = "IMF", e_value = "IMF.E.Value",
+                                  imf = "IMF", e_value = "E.Value",
                                   emf = "EMF", sample = "sample",
                                   observed_mz = "ObservedMZ.Mean",
                                   assigned_mz = "Assigned.M.Z",
@@ -67,7 +67,10 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   all_assignments <- purrr::map_df(assigned_data, "assignments")
 
   if (remove_seconary) {
-    all_assignments <- all_assignments[all_assignments$Type %in% "Primary", ]
+    if (!is.null(all_assignments$Type)) {
+      all_assignments <- all_assignments[all_assignments$Type %in% "Primary", ]
+    }
+
   }
 
 
@@ -77,7 +80,7 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
   sudo_end <- Sys.time()
 
-  if (progress) difftime(sudo_end, sudo_start)
+  if (progress) message(paste0("  Completed after ", format(difftime(sudo_end, sudo_start))))
 
   all_e_value <- all_assignments[, e_value]
   min_e_value <- min(all_e_value[all_e_value > 0], na.rm = TRUE)
@@ -590,13 +593,16 @@ peak_assignments_2_df <- function(peak_list, include_non_primary = TRUE) {
 
 
 assignment_list_2_df <- function(in_assignment, include_non_primary = TRUE){
-  assign_types <- purrr::map_chr(in_assignment, "Type")
+  if (!is.null(in_assignment[["Type"]])) {
+    assign_types <- purrr::map_chr(in_assignment, "Type")
 
-  if (!include_non_primary) {
-    in_assignment <- in_assignment[assign_types %in% "Primary"]
+    if (!include_non_primary) {
+      in_assignment <- in_assignment[assign_types %in% "Primary"]
+    }
+
+    in_assignment <- purrr::map(in_assignment, replace_null)
+
   }
-
-  in_assignment <- purrr::map(in_assignment, replace_null)
 
   assign_df <- purrr::map_df(in_assignment, as.data.frame, stringsAsFactors = FALSE)
 

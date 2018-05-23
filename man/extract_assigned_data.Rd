@@ -5,7 +5,7 @@
 \title{extract data}
 \usage{
 extract_assigned_data(assigned_data, remove_seconary = TRUE,
-  sample_peak = "sample_peak", imf = "IMF", e_value = "IMF.E.Value",
+  sample_peak = "sample_peak", imf = "IMF", e_value = "E.Value",
   emf = "EMF", sample = "sample", observed_mz = "ObservedMZ.Mean",
   assigned_mz = "Assigned.M.Z", height = "Height.Mean",
   other_cols = c("Adduct_IMF", "Adduct", "EMF2"), progress = TRUE)
