@@ -234,20 +234,27 @@ choose_single_peak <- function(assignment_data, keep_imf, imf_mz = NULL, imf = "
     } else if ((length(sample_peak_match_imf) > 1) && (all(!is.na(sample_peak_match_imf)))) {
       use_loc <- (sample_data[, sample_peak] %in% sample_peak_match_imf) & match_imf
       tmp_data <- sample_data[use_loc, ]
-      type_matches <- tmp_data[, "Type"]
 
-      # return the one that matched with a "Primary" assignment
-      if ((length(unique(type_matches)) == 2) && (all(!is.na(type_matches)))) {
-        use_peak <- tmp_data[type_matches %in% "Primary", imf]
-        return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
-      } else if ((length(unique(type_matches)) == 1) && (all(!is.na(type_matches)))) {
+      if (!is.null(tmp_data$Type)) {
+        type_matches <- tmp_data[, "Type"]
+
+        # return the one that matched with a "Primary" assignment
+        if ((length(unique(type_matches)) == 2) && (all(!is.na(type_matches)))) {
+          use_peak <- tmp_data[type_matches %in% "Primary", imf]
+          return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
+        } else {
+          mz_diff <- abs(tmp_data$ObservedMZ.Mean - tmp_data$Assigned.M.Z)
+          use_peak <- tmp_data[which.min(mz_diff), sample_peak]
+          return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
+        }
+      } else {
         # return the one that had the smallest difference in mass
         mz_diff <- abs(tmp_data$ObservedMZ.Mean - tmp_data$Assigned.M.Z)
         use_peak <- tmp_data[which.min(mz_diff), sample_peak]
         return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
       }
-
     }
+
 
     # No IMF matches, now what??
     # do it based on closest overall m/z diff to the chosen IMF, which was also
