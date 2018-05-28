@@ -1,0 +1,181 @@
+# checking relative NAP and intensity
+
+```{r load_data}
+library(smirfeTools)
+library(SIRM.FTMS.peakCharacterization)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+extracted_data <- readRDS("lung_matched_tissue_mz_testing.rds")
+assignments <- readRDS("lung_matched_tissue_mz_testing_assingments.rds")
+
+n_assignments <- apply(extracted_data$height, 2, function(x){sum(!is.na(x))})
+
+use_data <- which.max(n_assignments)
+
+df_data <- data.frame(mz = extracted_data$mz[, use_data],
+                      height = extracted_data$height[, use_data])
+df_data$imf <- extracted_data$imf[, use_data]
+df_data$emf <- extracted_data$emf[, use_data]
+df_data$peak = rownames(extracted_data$mz)
+```
+
+Now we need to do some fun calculations for all of the IMFs within an EMF.
+
+$$I_{total}=\frac{\Sigma{I_{Obs}}}{\Sigma{NAP}}$$
+
+$$I_{rel,i} = \frac{I_i}{I_{total}}$$
+
+$$I_{ratio} = \frac{I_{rel,i}}{NAP_i}$$
+
+This $I_{ratio}$ can then be examined *wrt* M/Z to see how it tracks.
+
+```{r assignment_info}
+use_sample <- colnames(extracted_data$mz)[use_data]
+assignment_info <- filter(assignments, sample %in% use_sample)
+
+emf_data <- split(assignment_info, assignment_info$EMF)
+
+calc_ratio <- function(emf_info){
+  nap_sum <- sum(emf_info$NAP)
+  i_sum <- sum(emf_info$Height.Mean)
+  
+  i_total <- i_sum / nap_sum
+  
+  i_rel <- emf_info$Height.Mean / i_total
+  emf_info$I.NAP.Ratio <- (i_rel / emf_info$NAP)
+  emf_info
+}
+
+emf_ratios <- purrr::map_df(emf_data, calc_ratio)
+
+ggplot(emf_ratios, aes(x = ObservedMZ.Mean, y = log10(I.NAP.Ratio))) + geom_point() + geom_smooth(method = "loess", span = 1.5) 
+```
+
+```{r show_df}
+knitr::kable(emf_ratios[1:5, c("EMF", "IMF", "I.NAP.Ratio")])
+```
+
+```{r do_it_for_all}
+split_samples <- split(assignments, assignments$sample)
+
+sample_ratios <- purrr::map(split_samples, function(in_sample){
+  split_emf <- split(in_sample, in_sample$EMF)
+  purrr::map_df(split_emf, calc_ratio)
+})
+```
+
+```{r plot_them, fig.keep='all'}
+set.seed(1234)
+use_samples <- sample(length(sample_ratios), 20)
+
+for (isample in use_samples) {
+  p <- ggplot(sample_ratios[[isample]], aes(x = ObservedMZ.Mean, y = log10(I.NAP.Ratio))) + geom_point() + geom_smooth(method = "loess", span = 1.5) +
+    labs(x = "M/Z", y = expression(log10(I[rel] / NAP)))
+  print(p)
+}
+```
+
+```{r model_them}
+all_models <- purrr::map2_dfr(sample_ratios, names(sample_ratios), function(in_ratio, id){
+  loess_model <- loess(log10(I.NAP.Ratio) ~ ObservedMZ.Mean, data = in_ratio, span = 1.5)
+  loess_df <- loess_to_df(loess_model)
+  loess_df$sample <- id
+  filter(loess_df, which %in% "fitted")
+})
+
+use_samples_id <- names(sample_ratios)[use_samples]
+
+ggplot(filter(all_models, sample %in% use_samples_id), aes(x = x, y = y, color = sample)) + geom_line() + theme(legend.position = "none") +
+  labs(x = "M/Z", y = expression(log10(I[rel] / NAP)))
+```
+
+I should clean this data up a bit, and do IMF selection on each peak, and then only use those peaks that have a single IMF, TBH.
+
+## Peak Number of Points by M/Z
+
+```{r raw_data}
+zip_data <- zip_ms("~/Documents/manuscripts/peakCharacterization/data_analysis/data_input/100Cpos.zip")
+
+zip_data$load_peak_finder()
+zip_data$cleanup()
+
+
+peak_1_scan <- zip_data$peak_finder$multi_scan_peaklist$peak_list_by_scans[[1]]$peak_list
+
+ggplot(peak_1_scan, aes(x = ObservedMZ, y = n_point)) + geom_point() + geom_jitter()
+
+peak_1_points <- transmute(peak_1_scan, npoint = n_point, mz = ObservedMZ)
+
+average_peak_size <- function(mz_npoint, use_range = NULL, 
+                              window = 1, delta = 0.1){
+  if (is.null(use_range)) {
+    use_range <- range(mz_npoint$mz)
+  }
+
+  window_locs <- data.frame(beg = round(seq(use_range[1], use_range[2] - window, delta), 2),
+                            end = round(seq(use_range[1] + window, use_range[2], delta), 2))
+
+  average_data <- purrr::map_df(seq(1, nrow(window_locs)), function(in_window){
+    in_window <- (mz_npoint$mz >= window_locs[in_window, "beg"]) & (mz_npoint$mz <= window_locs[in_window, "end"])
+    data.frame(density = sum(in_window),
+               npoint = mean(mz_npoint[in_window, "npoint"]),
+               mz = mean(mz_npoint[in_window, "mz"]))
+  })
+   average_data
+}
+
+# for a single scan
+scan1_average_points <- average_peak_size(peak_1_points, window = 100, delta = 1)
+ggplot(scan1_average_points, aes(x = mz, y = npoint)) + geom_point() +
+  labs(title = "single scan n_point smoothed")
+
+# grab the point data for the correspondent peaks
+scan_order <- zip_data$peak_finder$correspondent_peaks$master_peak_list$scan_indices
+zip_data$peak_finder$multi_scan_peaklist$scan_indices <- scan_order
+all_peaklists <- purrr::map(zip_data$peak_finder$multi_scan_peaklist$get_scan_peak_lists(), "peak_list")
+peaks <- zip_data$peak_finder$correspondent_peaks$master_peak_list$scan_peak
+
+n_point_matrix <- matrix(NA, nrow = nrow(peaks), ncol = ncol(peaks))
+for (icol in seq(1, ncol(peaks))) {
+  tmp_list <- all_peaklists[[icol]]
+  for (irow in seq(1, nrow(peaks))) {
+    peak_index <- peaks[irow, icol]
+    
+    if (!is.na(peak_index)) {
+      n_point_matrix[irow, icol] <- tmp_list[tmp_list$peak %in% peak_index, "n_point"]
+      print(c(peak_index, n_point_matrix[irow, icol]))
+    }
+      
+  }
+  
+}
+
+mean_point_matrix <- rowMeans(n_point_matrix, na.rm = TRUE)
+
+mean_n_point_mz <- data.frame(mz = zip_data$peak_finder$correspondent_peaks$master_peak_list$master, npoint = mean_point_matrix,
+                              nscan = rowSums(!is.na(n_point_matrix), na.rm = TRUE))
+
+mean_n_point_mz <- filter(mean_n_point_mz, nscan >= 3)
+
+p <- ggplot(mean_n_point_mz, aes(x = mz, y = npoint, color = nscan)) + geom_point() + labs(title = "correspondent peaks average n_point")
+
+all_average_points <- average_peak_size(mean_n_point_mz, window = 100, delta = 1)
+
+p <- ggplot(all_average_points, aes(x = mz, y = npoint)) + geom_point() + geom_smooth(method = "loess", span = 1.5)
+p + labs(title = "correspondent peaks average n_point smoothed")
+
+mz_model <- loess_to_df(zip_data$peak_finder$multi_scan_peaklist$mz_model) %>% filter(which %in% "fitted")
+mz_model$y2 <- max(mz_model$y) - mz_model$y
+
+p + geom_point(data = mz_model, aes(x = x, y = (y2*1000) + 9), color = "red") + labs(title = "correspondent peaks average n_point smoothed + inverse of M/Z model")
+```
+
+So what if we scale this by the spacing in M/Z space?
+
+```{r scale_by_mz_model}
+all_average_points$diff <- predict(zip_data$peak_finder$multi_scan_peaklist$mz_model, newdata = all_average_points$mz)
+
+ggplot(all_average_points, aes(x = mz, y = npoint / (max(npoint)))) + geom_point()
+```
