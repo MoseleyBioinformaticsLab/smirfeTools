@@ -16,13 +16,28 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
     knitrProgressBar::update_progress(.pb)
   }
   tmp_list <- jsonlite::fromJSON(smirfe_assignment, simplifyVector = FALSE)
-  sample <- gsub(".json.output", "", basename(smirfe_assignment))
+  if (is.null(tmp_list$Sample)) {
+    sample <- gsub(".json.output", "", basename(smirfe_assignment))
+  } else {
+    sample <- tmp_list$Sample
+  }
 
-  assignments <- get_assigned_peak_info(tmp_list$Peaks)
-  assignments$sample <- sample
-  assignments$sample_peak <- paste0(assignments$sample, "_", assignments$peak_id)
-  list(tic = tmp_list$TotalIntensity$Value,
-       assignments = assignments,
+  has_assign <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
+  peak_info <- internal_map$map_function(tmp_list$Peaks, which(has_assign), extract_peak_data)
+
+  peak_info <- peak_info[has_assign]
+  peak_data <- purrr::map_dfr(peak_info, "peak_data")
+  peak_assignments <- purrr::map_dfr(peak_info, "assignment")
+
+  peak_data$Sample <- sample
+  peak_data$Sample_Peak <- paste0(sample, "_", peak_data$PeakID)
+
+  peak_assignments$Sample <- sample
+  peak_assignments$Sample_Peak <- paste0(sample, "_", peak_assignments$PeakID)
+
+  list(tic = tmp_list$TIC,
+       assignments = peak_assignments,
+       data = peak_data,
        sample = sample)
 }
 
@@ -505,16 +520,16 @@ peak_list_2_df <- function(peak_list,
     #print(ipeak)
     single_peak <- peak_list[[ipeak]]
 
-    if (is.null(single_peak$Peak)) {
+    if (is.null(single_peak$PeakID)) {
       peak_id <- ipeak
     } else {
-      peak_id <- single_peak$Peak
+      peak_id <- single_peak$PeakID
     }
-    if (is.na(single_peak$Sample) & !is.null(single_peak$Scan)) {
-      scan <- as.character(single_peak$Scan)
-    } else {
-      scan <- single_peak$Sample
-    }
+    # if (is.na(single_peak$Sample) & !is.null(single_peak$Scan)) {
+    #   scan <- as.character(single_peak$Scan)
+    # } else {
+    #   scan <- single_peak$Sample
+    # }
     nscan <- single_peak$NScan
 
     tmp_df <- purrr::map_df(summary_values, function(in_value){
@@ -534,6 +549,40 @@ peak_list_2_df <- function(peak_list,
   })
 }
 
+extract_assignments <- function(assignment_list){
+  if (!is.null(assignment_list$lbl)) {
+    names(assignment_list$lbl) <- c("type", "count")
+  }
+
+  assignment_df <- as.data.frame(assignment_list)
+  keep_names <- names(assignment_df)[!(names(assignment_df) %in% "isotopologue_IMF")]
+
+  suppressWarnings(tidyr::gather(assignment_df, key = "Type", value = "Assignment_Data", !!keep_names))
+}
+
+extract_peak_data <- function(single_peak_list){
+  assignments <- single_peak_list$Assignments
+  single_peak_list$Assignments <- NULL
+  if (!is.null(single_peak_list$type)) {
+    single_peak_list$type <- NULL
+  }
+
+  single_names <- names(single_peak_list)
+  keep_names <- single_names[!(single_names %in% "PeakID")]
+
+
+  single_df <- tidyr::gather(as.data.frame(single_peak_list), key = "Measurement", value = "Value", !!keep_names)
+
+  if (length(assignments) != 0) {
+    peak_assignment <- suppressWarnings(purrr::map_df(assignments, extract_assignments))
+    peak_assignment$PeakID <- single_df$PeakID[1]
+  } else {
+    peak_assignment <- list()
+  }
+
+  return(list(peak_data = single_df, assignment = peak_assignment))
+
+}
 
 extract_peak_characteristics <- function(peak_df, extract_variables = c("ObservedMZ", "Height"), extract_summary = c("Mean")){
   expanded_combinations <- expand.grid(extract_variables, extract_summary)
