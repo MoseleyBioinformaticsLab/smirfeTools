@@ -4,11 +4,13 @@
 \alias{extract_assigned_data}
 \title{extract data}
 \usage{
-extract_assigned_data(assigned_data, remove_seconary = TRUE,
-  sample_peak = "sample_peak", imf = "IMF", e_value = "E.Value",
-  emf = "EMF", sample = "sample", observed_mz = "ObservedMZ.Mean",
-  assigned_mz = "Assigned.M.Z", height = "Height.Mean",
-  other_cols = c("Adduct_IMF", "Adduct", "EMF2"), progress = TRUE)
+extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
+  imf = "isotopologue_IMF", e_value = "e_value",
+  emf = "isotopologue_EMF", sample = "Sample",
+  mz_diff = "mass_error", data_col = "Assignment_Data",
+  numeric_values = c("e_value", "mass_error", "NAP", "lbl.count",
+  "clique_size"), observed_mz = "ObservedMZ", height = "Height",
+  remove_elements = "S", progress = TRUE)
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}
@@ -25,15 +27,15 @@ extract_assigned_data(assigned_data, remove_seconary = TRUE,
 
 \item{observed_mz}{which variable holds the observed M/Z}
 
-\item{assigned_mz}{which variable holds the assigned M/Z}
-
 \item{height}{which variable holds the height / intensity}
-
-\item{other_cols}{which other columns should be kept?}
 
 \item{progress}{should the progress be shown?}
 
 \item{remove_secondary}{remove the seconardy assignments? (default is TRUE)}
+
+\item{assigned_mz}{which variable holds the assigned M/Z}
+
+\item{other_cols}{which other columns should be kept?}
 }
 \value{
 list of matrices and a data.frame

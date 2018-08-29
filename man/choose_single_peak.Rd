@@ -4,36 +4,30 @@
 \alias{choose_single_peak}
 \title{choose a peak}
 \usage{
-choose_single_peak(assignment_data, keep_imf, imf_mz = NULL, imf = "IMF",
-  sample_peak = "sample_peak", sample = "sample")
+choose_single_peak(mz_diff_data, imf = "IMF",
+  sample_peak = "Sample_Peak", sample = "Sample",
+  data_col = "Assignment_Data")
 }
 \arguments{
-\item{assignment_data}{the data.frame of assignment data}
-
-\item{keep_imf}{which IMF was chosen from the assignments}
-
-\item{imf_mz}{the assigned IMF M/Z}
+\item{mz_diff_data}{the data.frame with mz_errors}
 
 \item{imf}{which variable are the IMFs listed}
 
 \item{sample_peak}{which variable contains the sample peak information}
 
 \item{sample}{which variable has the sample information}
+
+\item{data_col}{which variable has the actual mz mass error}
 }
 \value{
-data.frame of assignment data, with a single peak in each sample.
+data.frame Peaks and Samples
 }
 \description{
 When there are multiple peaks in a sample, we need to choose one based on
-the chosen representative IMF. See \strong{Details} for more information on how
+the chosen representative IMFs. See \strong{Details} for more information on how
 that decision is made.
 }
 \details{
-Given the \code{assignment_data} and which IMF to keep, picks which
-peak should be kept for a given sample. This is made in order of:
-\enumerate{
-\item Does one of the peaks have a \strong{Primary} assignment matching the IMF?
-\item Does one of the peaks have a \strong{Secondary} assignment matching the IMF?
-\item Which peak has the \strong{smallest} M/Z difference to the chosen IMF?
-}
+If there are multiple peaks for each sample, picks the one with
+the smallest M/Z error with the provided isotopologues.
 }
