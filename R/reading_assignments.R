@@ -70,24 +70,29 @@ get_tic <- function(assigned_data){
 #' @importFrom dplyr left_join
 #'
 #' @return list of matrices and a data.frame
-extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
-                                  sample_peak = "sample_peak",
-                                  imf = "IMF", e_value = "E.Value",
-                                  emf = "EMF", sample = "sample",
-                                  observed_mz = "ObservedMZ.Mean",
-                                  assigned_mz = "Assigned.M.Z",
-                                  height = "Height.Mean",
-                                  other_cols = c("Adduct_IMF", "Adduct", "EMF2"),
+extract_assigned_data <- function(assigned_data,
+                                  sample_peak = "Sample_Peak",
+                                  imf = "isotopologue_IMF",
+                                  e_value = "e_value",
+                                  emf = "isotopologue_EMF",
+                                  sample = "Sample",
+                                  mz_diff = "mass_error",
+                                  data_col = "Assignment_Data",
+                                  numeric_values = c("e_value", "mass_error", "NAP", "lbl.count", "clique_size"),
+                                  observed_mz = "ObservedMZ",
+                                  height = "Height",
+                                  remove_elements = "S",
                                   progress = TRUE){
   all_assignments <- purrr::map_df(assigned_data, "assignments")
+  all_peak_data <- purrr::map_df(assigned_data, "data")
 
-  if (remove_seconary) {
-    if (!is.null(all_assignments$Type)) {
-      all_assignments <- all_assignments[all_assignments$Type %in% "Primary", ]
-    }
+  has_removeable <- grepl(remove_elements, all_assignments[[imf]])
 
-  }
+  all_assignments <- all_assignments[!has_removeable, ]
 
+  split_assignments <- split(all_assignments, all_assignments[[sample_peak]])
+
+  all_assignments <- purrr::map_df(split_assignments, filter_peak_imfs, imf = imf, e_value = e_value)
 
   if (progress) message("Creating pseudo peaks ...")
 
@@ -96,10 +101,6 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   sudo_end <- Sys.time()
 
   if (progress) message(paste0("  Completed after ", format(difftime(sudo_end, sudo_start))))
-
-  all_e_value <- all_assignments[, e_value]
-  min_e_value <- min(all_e_value[all_e_value > 0], na.rm = TRUE)
-  min_e_value <- min_e_value * 0.1
 
   all_samples <- unique(all_assignments[, sample])
   peak_matrix <- matrix(NA, nrow = length(sudo_peaks), ncol = length(all_samples))
@@ -135,26 +136,28 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
     tmp_assignment <- all_assignments[all_assignments[, imf] %in% sudo_peaks[[ipeak]][[imf]], ]
     use_imfs <- choose_imfs(tmp_assignment, sample_peak = sample_peak,
                             imf = imf, sample = sample, e_value = e_value,
-                            min_e_value = min_e_value)
+                            data_col = data_col)
+    use_imfs <- unique(use_imfs)
     peak_2_imf[[ipeak]] <- use_imfs
 
-    imf_mz <- unique(tmp_assignment[tmp_assignment[, imf] %in% use_imfs, assigned_mz])
-    peak_data <- choose_single_peak(tmp_assignment, use_imfs, imf_mz, imf = imf,
-                                    sample_peak = sample_peak, sample = sample)
+    imf_mz_diff <- unique(tmp_assignment[(tmp_assignment[, imf] %in% use_imfs) & (tmp_assignment$Type %in% mz_diff), ])
+    imf_mz_diff[[data_col]] <- as.numeric(imf_mz_diff[[data_col]])
+    use_peaks <- choose_single_peak(imf_mz_diff,
+                                    sample_peak = sample_peak, sample = sample,
+                                    data_col = data_col)
+    names(use_peaks) <- NULL
 
-    use_peaks <- unique(peak_data[, sample_peak])
     peak_2_peak[[ipeak]] <- use_peaks
 
-    peak_mz <- extract_single(peak_data, use_var = observed_mz, sample_peak = sample_peak, sample = sample)
+    peak_mz <- extract_single(all_peak_data, peaks = use_peaks, use_var = observed_mz, key = "Measurement", value = "Value", sample_peak = sample_peak, sample = sample)
     mz_matrix[ipeak, names(peak_mz)] <- peak_mz
 
-    peak_height <- extract_single(peak_data, use_var = height,
-                                  sample_peak = sample_peak, sample = sample)
+    peak_height <- extract_single(all_peak_data, peaks = use_peaks, use_var = height, key = "Measurement", value = "Value", sample_peak = sample_peak, sample = sample)
     height_matrix[ipeak, names(peak_height)] <- peak_height
 
-    peak_imf <- extract_multiple(peak_data, use_var = imf, sample = sample)
+    peak_imf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]]%in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks), c(imf, sample)], use_var = imf, sample = sample)
     imf_matrix[ipeak, names(peak_imf)] <- peak_imf
-    peak_emf <- extract_multiple(peak_data, use_var = emf, sample = sample)
+    peak_emf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]] %in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks) & (tmp_assignment[["Type"]] %in% emf), c(data_col, sample)], use_var = data_col, sample = sample)
     emf_matrix[ipeak, names(peak_emf)] <- peak_emf
   }
 
@@ -162,7 +165,9 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
   all_imf <- data.frame(peak = rep(names(peak_2_imf), n_imf), imf = unlist(peak_2_imf),
                         stringsAsFactors = FALSE)
   names(all_imf)[2] <- imf
-  all_imf <- dplyr::left_join(all_imf, unique(all_assignments[, c(imf, emf, other_cols)]), by = imf)
+  emf_data <- all_assignments[(all_assignments[[imf]] %in% unique(all_imf[[imf]])) & (all_assignments[["Type"]] %in% emf), c(imf, data_col)]
+  names(emf_data)[2] <- emf
+  all_imf <- dplyr::left_join(all_imf, unique(emf_data[, c(imf, emf)]), by = imf)
 
   return(list(mz = mz_matrix, height = height_matrix,
               imf = imf_matrix, emf = emf_matrix,
@@ -170,21 +175,44 @@ extract_assigned_data <- function(assigned_data, remove_seconary = TRUE,
               tic = get_tic(assigned_data)))
 }
 
-extract_single <- function(assignment_data, use_var = NULL, sample_peak = "sample_peak", sample = "sample"){
+filter_peak_imfs <- function(peak_assignments, imf = "isotopologue_IMF", e_value = "e_value"){
+  e_value <- rlang::enquo(e_value)
+  #imf <- rlang::enquo(imf)
+
+  if (length(unique(peak_assignments[[imf]])) == 1) {
+    return(peak_assignments)
+  } else {
+    just_evalues <- dplyr::filter(peak_assignments, Type %in% !!e_value)
+    just_evalues$Assignment_Data <- as.numeric(just_evalues$Assignment_Data)
+    just_evalues <- just_evalues[order(just_evalues$Assignment_Data), ]
+    log_evalues <- -1*log10(just_evalues$Assignment_Data)
+    evalue_diffs <- log_evalues - dplyr::lead(log_evalues)
+    evalue_diffs[is.infinite(evalue_diffs)] <- 1e6
+    evalue_diffs[is.na(evalue_diffs)] <- 0
+
+    if (sum(evalue_diffs >= 3) > 0) {
+      keep_imf <- just_evalues[[imf]][seq(1, which(evalue_diffs >= 3)[1])]
+    } else {
+      keep_imf <- just_evalues[[imf]]
+    }
+    out_peaks <- peak_assignments[peak_assignments[[imf]]%in% keep_imf, ]
+    return(out_peaks)
+  }
+}
+
+extract_single <- function(assignment_data, peaks, use_var = NULL, key = NULL, value = NULL, sample_peak = "Sample_Peak", sample = "Sample"){
 
   if (is.null(use_var)) {
     stop("The variable to extract (use_var) must be defined!")
   }
 
-  tmp_data <- unique(assignment_data[, c(use_var, sample_peak, sample)])
-
-  if (nrow(tmp_data) == length(unique(tmp_data[, sample]))) {
-    out_data <- tmp_data[, use_var]
-    names(out_data) <- tmp_data[, sample]
-  } else {
-    warning("Data doesn't match samples!")
-    out_data <- NA
+  tmp_data <- assignment_data[(assignment_data[[key]] %in% use_var) & (assignment_data[[sample_peak]] %in% peaks), ]
+  if (!is.na(as.numeric(tmp_data[[value]][1]))) {
+    tmp_data[[value]] <- as.numeric(tmp_data[[value]])
   }
+
+  out_data <- tmp_data[[value]]
+  names(out_data) <- tmp_data[[sample]]
 
   out_data
 
@@ -197,99 +225,38 @@ extract_multiple <- function(assignment_data, use_var = NULL, sample = "sample")
   }
 
   tmp_data <- split(assignment_data[, use_var], assignment_data[, sample])
+  tmp_data <- purrr::map(tmp_data, unique)
   tmp_data
 }
 
 #' choose a peak
 #'
 #' When there are multiple peaks in a sample, we need to choose one based on
-#' the chosen representative IMF. See **Details** for more information on how
+#' the chosen representative IMFs. See **Details** for more information on how
 #' that decision is made.
 #'
-#' @param assignment_data the data.frame of assignment data
-#' @param keep_imf which IMF was chosen from the assignments
-#' @param imf_mz the assigned IMF M/Z
+#' @param mz_diff_data the data.frame with mz_errors
 #' @param imf which variable are the IMFs listed
 #' @param sample_peak which variable contains the sample peak information
 #' @param sample which variable has the sample information
+#' @param data_col which variable has the actual mz mass error
 #'
-#' @details Given the `assignment_data` and which IMF to keep, picks which
-#' peak should be kept for a given sample. This is made in order of:
-#' 1. Does one of the peaks have a **Primary** assignment matching the IMF?
-#' 1. Does one of the peaks have a **Secondary** assignment matching the IMF?
-#' 1. Which peak has the **smallest** M/Z difference to the chosen IMF?
+#' @details If there are multiple peaks for each sample, picks the one with
+#' the smallest M/Z error with the provided isotopologues.
 #'
 #' @export
 #'
-#' @return data.frame of assignment data, with a single peak in each sample.
-choose_single_peak <- function(assignment_data, keep_imf, imf_mz = NULL, imf = "IMF",
-                               sample_peak = "sample_peak", sample = "sample"){
-  split_sample <- split(assignment_data, assignment_data[, sample])
+#' @return data.frame Peaks and Samples
+choose_single_peak <- function(mz_diff_data, imf = "IMF",
+                               sample_peak = "Sample_Peak", sample = "Sample",
+                               data_col = "Assignment_Data"){
+  split_sample <- split(mz_diff_data, mz_diff_data[, sample])
 
-  n_peak <- purrr::map_int(split_sample, function(x){length(unique(x[, sample_peak]))})
-
-  if (all(n_peak == 1)) {
-    return(assignment_data)
-  }
-
-  split_multi <- split_sample[n_peak > 1]
-
-  decide_peak <- function(sample_data, keep_imf, imf_mz = NULL, imf = "IMF",
-                          sample_peak = "sample_peak", sample = "sample"){
-    match_imf <- sample_data[, imf] %in% keep_imf
-
-    sample_peak_match_imf <- unique(sample_data[match_imf, sample_peak])
-
-    # assuming there were matches to the chosen IMF
-    # return the single matching peak (hopefully)
-    if ((length(sample_peak_match_imf) == 1) && (all(!is.na(sample_peak_match_imf)))) {
-      return(sample_data[(sample_data[, sample_peak] %in% sample_peak_match_imf), ])
-
-
-    } else if ((length(sample_peak_match_imf) > 1) && (all(!is.na(sample_peak_match_imf)))) {
-      use_loc <- (sample_data[, sample_peak] %in% sample_peak_match_imf) & match_imf
-      tmp_data <- sample_data[use_loc, ]
-
-      if (!is.null(tmp_data$Type)) {
-        type_matches <- tmp_data[, "Type"]
-
-        # return the one that matched with a "Primary" assignment
-        if ((length(unique(type_matches)) == 2) && (all(!is.na(type_matches)))) {
-          use_peak <- tmp_data[type_matches %in% "Primary", imf]
-          return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
-        } else {
-          mz_diff <- abs(tmp_data$ObservedMZ.Mean - tmp_data$Assigned.M.Z)
-          use_peak <- tmp_data[which.min(mz_diff), sample_peak]
-          return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
-        }
-      } else {
-        # return the one that had the smallest difference in mass
-        mz_diff <- abs(tmp_data$ObservedMZ.Mean - tmp_data$Assigned.M.Z)
-        use_peak <- tmp_data[which.min(mz_diff), sample_peak]
-        return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
-      }
-    }
-
-
-    # No IMF matches, now what??
-    # do it based on closest overall m/z diff to the chosen IMF, which was also
-    # passed in, just in case
-    mz_diff <- purrr::map_df(split(sample_data, sample_data[, sample_peak]), function(in_peak){
-      tmp_frame <- data.frame(mz_diff = abs(in_peak$ObservedMZ.Mean[1] - imf_mz))
-      tmp_frame[[2]] <- in_peak[1, sample_peak]
-      names(tmp_frame)[2] <- sample_peak
-      tmp_frame
-    })
-    use_peak <- mz_diff[which.min(mz_diff$mz_diff), sample_peak]
-
-    return(sample_data[(sample_data[, sample_peak] %in% use_peak), ])
-  }
-
-  multi_data <- purrr::map(split_multi, decide_peak, keep_imf, imf_mz,
-                           imf = imf, sample_peak = sample_peak, sample = sample)
-  all_data <- purrr::map_df(c(multi_data, split_sample[n_peak == 1]), function(x){x})
-
-  all_data
+  keep_peaks <- purrr::map_chr(split_sample, function(in_sample){
+    peak_index <- which.min(in_sample[[data_col]])
+    in_sample[[sample_peak]][peak_index]
+  })
+  keep_peaks
 }
 
 
@@ -305,24 +272,22 @@ choose_single_peak <- function(assignment_data, keep_imf, imf_mz = NULL, imf = "
 #' @param e_value which is the e-value column?
 #' @param min_e_value what is the minimum e-value to use?
 #'
-choose_imfs <- function(assignment_data, sample_peak = "sample_peak", imf = "IMF",
-sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
+choose_imfs <- function(assignment_data, sample_peak = "Sample_Peak", imf = "isotopologue_IMF",
+sample = "Sample", e_value = "e_value", data_col = "Assignment_Data"){
 
   # easy cases, there is only 1 IMF
-  if (nrow(assignment_data) == 1) {
+  if (length(unique(assignment_data[[imf]])) == 1) {
     return(assignment_data[, imf])
   }
 
-  if (length(unique(assignment_data[, imf])) == 1) {
-    return(assignment_data[, imf][1])
-  }
-
+  assignment_e_values <- assignment_data[assignment_data$Type %in% e_value, ]
+  assignment_e_values[[data_col]] <- as.numeric(assignment_e_values[[data_col]])
   # then there are multiple IMFs to choose from
-  assignment_single_e_value <- pick_single_evalue(assignment_data,
+  assignment_single_e_value <- pick_single_evalue(assignment_e_values,
                                                   sample_peak = sample_peak,
                                                   imf = imf,
                                                   sample = sample,
-                                                  e_value = e_value)
+                                                  data_col = data_col)
 
   split_assignment_data <- split(assignment_single_e_value, assignment_single_e_value[, imf])
   n_sample <- length(unique(assignment_single_e_value[, sample]))
@@ -330,7 +295,7 @@ sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
   imf_stats <- purrr::map_df(split_assignment_data, function(in_imf){
     data.frame(imf = unique(in_imf[, imf]),
                ratio = nrow(in_imf) / n_sample,
-               evalue = median_e_values(in_imf[, e_value], min_e_value),
+               evalue = median_e_values(in_imf[, data_col]),
                stringsAsFactors = FALSE)
   })
 
@@ -349,9 +314,20 @@ sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
 
   out_ratio <- !(ratio_diffs > 0.2)
 
-  min_evalue <- min(imf_stats$evalue)
-  evalue_diffs <- abs(log10(min_evalue) - log10(imf_stats$evalue))
-  out_evalue <- !(evalue_diffs > 3)
+
+  if (all(imf_stats$evalue == 0)) {
+    out_evalue <- rep(TRUE, nrow(imf_stats))
+  } else {
+    min_evalue <- min(imf_stats$evalue)
+    if (min_evalue == 0) {
+      min_evalue <- 1
+    }
+    imf_stats[imf_stats$evalue == 0, "evalue"] <- 1
+
+    evalue_diffs <- abs(-1*log10(min_evalue) - -1*log10(imf_stats$evalue))
+    out_evalue <- !(evalue_diffs > 3)
+  }
+
 
   choose <- out_ratio & out_evalue
 
@@ -378,14 +354,14 @@ sample = "sample", e_value = "IMF.E.Value", min_e_value = 1e-18){
 
 }
 
-pick_single_evalue <- function(assignment_data, sample_peak = "sample_peak", imf = "IMF",
-                               sample = "sample", e_value = "IMF.E.Value"){
-  split_imf <- split(assignment_data, paste0(assignment_data[, imf], assignment_data[, sample]))
+pick_single_evalue <- function(assignment_e_values, sample_peak = "Sample_Peak", imf = "isotopologue_IMF",
+                               sample = "Sample", data_col = "Assignment_Data"){
+  split_imf <- split(assignment_e_values, paste0(assignment_e_values[, imf], assignment_e_values[, sample]))
 
-  assignment_data_single <- purrr::map_df(split_imf, function(x){
-    nrow_unique <- nrow(unique(x[, c(imf, e_value)]))
+  assignment_evalues_single <- purrr::map_df(split_imf, function(x){
+    nrow_unique <- nrow(unique(x[, c(imf, data_col)]))
     if (nrow_unique > 1) {
-      return(x[which.min(x[, e_value]), ])
+      return(x[which.min(x[, data_col]), ])
     } else {
       return(x[1, ])
     }
@@ -393,7 +369,7 @@ pick_single_evalue <- function(assignment_data, sample_peak = "sample_peak", imf
 }
 
 
-median_e_values <- function(e_values, min_e_value = 1e-18){
+median_e_values <- function(e_values){
   # handle na
   n_value <- length(e_values)
   if (sum(is.na(e_values)) == n_value) {
@@ -401,7 +377,7 @@ median_e_values <- function(e_values, min_e_value = 1e-18){
   } else {
     e_values <- e_values[!is.na(e_values)]
   }
-  e_values[e_values == 0] <- min_e_value
+  #e_values[e_values == 0] <- min_e_value
   if (n_value < 15) {
     min_value <- min(e_values)
     return(min_value)
@@ -425,7 +401,7 @@ median_e_values <- function(e_values, min_e_value = 1e-18){
 #'
 #' @export
 #' @return list of pseudo peaks
-create_sudo_peaks <- function(in_assignments, sample_peak = "sample_peak", imf = "IMF"){
+create_sudo_peaks <- function(in_assignments, sample_peak = "Sample_Peak", imf = "isotopologue_IMF"){
   in_assignments$grabbed <- FALSE
 
   peak_index <- 1
@@ -448,7 +424,7 @@ create_sudo_peaks <- function(in_assignments, sample_peak = "sample_peak", imf =
   # of the sample peaks
   while (sum(!in_assignments$grabbed) > 0) {
     tmp_peak <- unique(in_assignments[!in_assignments$grabbed, sample_peak])[1]
-    tmp_imf <- in_assignments[in_assignments[, sample_peak] %in% tmp_peak, imf]
+    tmp_imf <- in_assignments[in_assignments[, sample_peak] %in% tmp_peak, imf][1]
 
     all_peak_imf <- unique(in_assignments[in_assignments[, imf] %in% tmp_imf, sample_peak])
     all_imf_peak <- unique(in_assignments[in_assignments[, sample_peak] %in% all_peak_imf, imf])
@@ -551,9 +527,16 @@ peak_list_2_df <- function(peak_list,
 
 extract_assignments <- function(assignment_list){
   if (!is.null(assignment_list$lbl)) {
-    names(assignment_list$lbl) <- c("type", "count")
+    if (length(assignment_list$lbl == 1)) {
+      assignment_list$lbl = NULL
+    } else if (length(assignment_list$lbl) == 2) {
+      names(assignment_list$lbl) <- c("type", "count")
+    }
+
   }
 
+  not_null_entries = !purrr::map_lgl(assignment_list, is.null)
+  assignment_list = assignment_list[not_null_entries]
   assignment_df <- as.data.frame(assignment_list)
   keep_names <- names(assignment_df)[!(names(assignment_df) %in% "isotopologue_IMF")]
 
