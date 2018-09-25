@@ -47,6 +47,61 @@ get_tic <- function(assigned_data){
   tic
 }
 
+#' Remove Only Labeled EMFs
+#'
+#' Removes EMFs that *only* contain labeled IMFs.
+#'
+#' When working with metabolomics data where labeled precursors are used
+#' and there is a reasonable expectation that label is incorporated,
+#' it is highly unlikely that there are cases where the un-labeled
+#' IMF among a set of EMFs will not be observed.
+#' However, this is not baked into the
+#' SMIRFE assignment algorithm, so we provide this functionality here.
+#'
+#' Note that this should be run **after** `read_smirfe_assignment` and
+#' **before** `extract_assigned_data`.
+#'
+#' @param assignment_data a data.frame of assignments for peaks
+#' @param remove_s logical, should EMFs with Sulfur also be removed?
+#'
+#' @export
+#' @return data.frame
+remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
+  emf_adducts = assignment_data[assignment_data$Type %in% c("adduct_EMF", "isotopologue_EMF"), ]
+
+  emf_adducts = split(emf_adducts, emf_adducts$isotopologue_IMF)
+
+  emf_adducts2 = purrr::map_dfr(emf_adducts, function(x){
+    adduct_pair = paste0(x[x$Type %in% "isotopologue_EMF", "Assignment_Data"], ".",
+                         x[x$Type %in% "adduct_EMF", "Assignment_Data"])
+    data.frame(isotopologue_IMF = x$isotopologue_IMF[1],
+               adduct_EMF = adduct_pair)
+  })
+
+  assignment_data = dplyr::left_join(assignment_data, emf_adducts2, by = "isotopologue_IMF")
+
+  lbl_counts = assignment_data[assignment_data$Type %in% "lbl.count", ]
+  split_emf_adduct = split(lbl_counts, lbl_counts$adduct_EMF)
+
+  keep_emf = purrr::map_lgl(split_emf_adduct, function(in_adduct){
+    if (sum(in_adduct$Assignment_Data == 0) == 0){
+      return(FALSE)
+    } else {
+      return(TRUE)
+    }
+  })
+
+  valid_emf = names(split_emf_adduct)[keep_emf]
+
+  if (remove_s) {
+    valid_emf = grep("S", valid_emf, value = TRUE, invert = TRUE)
+  }
+
+  assignment_data = assignment_data[assignment_data$adduct_EMF %in% valid_emf, ]
+  assignment_data
+}
+
+
 #' extract data
 #'
 #' Extract the data from a complete set of assignments.
