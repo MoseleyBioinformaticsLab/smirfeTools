@@ -11,6 +11,9 @@ remove_only_labeled_emfs(assignment_data, remove_s = TRUE)
 
 \item{remove_s}{logical, should EMFs with Sulfur also be removed?}
 }
+\value{
+data.frame
+}
 \description{
 Removes EMFs that \emph{only} contain labeled IMFs.
 }
