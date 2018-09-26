@@ -582,7 +582,7 @@ peak_list_2_df <- function(peak_list,
 
 extract_assignments <- function(assignment_list){
   if (!is.null(assignment_list$lbl)) {
-    if (length(assignment_list$lbl == 1)) {
+    if (length(assignment_list$lbl) == 1) {
       assignment_list$lbl = NULL
     } else if (length(assignment_list$lbl) == 2) {
       names(assignment_list$lbl) <- c("type", "count")
