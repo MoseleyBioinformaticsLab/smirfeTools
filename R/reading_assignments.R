@@ -4,6 +4,7 @@
 #' information.
 #'
 #' @param smirfe_assignment the set of assignment results
+#' @param assigned_only whether to return peaks with assignment only
 #' @param .pb a progress bar object
 #'
 #' @importFrom jsonlite fromJSON
@@ -11,7 +12,7 @@
 #' @return list of tic, assignments, sample
 #' @export
 #'
-read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
+read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb = NULL){
   if (!is.null(.pb)) {
     knitrProgressBar::update_progress(.pb)
   }
@@ -22,10 +23,14 @@ read_smirfe_assignment <- function(smirfe_assignment, .pb = NULL){
     sample <- tmp_list$Sample
   }
 
-  has_assign <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
-  peak_info <- internal_map$map_function(tmp_list$Peaks, which(has_assign), extract_peak_data)
+  if (!assigned_only) {
+    to_extract = rep(TRUE, length(tmp_list$Peaks))
+  } else {
+    to_extract <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
+  }
 
-  peak_info <- peak_info[has_assign]
+  peak_info <- internal_map$map_function(tmp_list$Peaks[to_extract], extract_peak_data)
+
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
   peak_assignments <- purrr::map_dfr(peak_info, "assignment")
 

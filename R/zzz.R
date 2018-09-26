@@ -8,7 +8,7 @@
 #' @return NULL
 set_internal_map <- function(map_function = NULL){
   if (is.null(map_function)) {
-    assign("map_function", purrr::map_at, envir = internal_map)
+    assign("map_function", purrr::map, envir = internal_map)
   } else {
     assign("map_function", map_function, envir = internal_map)
   }
