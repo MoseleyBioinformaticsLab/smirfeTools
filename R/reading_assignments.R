@@ -72,23 +72,15 @@ get_tic <- function(assigned_data){
 #' @export
 #' @return data.frame
 remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
-  emf_adducts = assignment_data[assignment_data$Type %in% c("adduct_EMF", "isotopologue_EMF"), ]
-
-  emf_adducts = split(emf_adducts, emf_adducts$isotopologue_IMF)
-
-  emf_adducts2 = purrr::map_dfr(emf_adducts, function(x){
-    adduct_pair = paste0(x[x$Type %in% "isotopologue_EMF", "Assignment_Data"], ".",
-                         x[x$Type %in% "adduct_EMF", "Assignment_Data"])
-    data.frame(isotopologue_IMF = x$isotopologue_IMF[1],
-               adduct_EMF = adduct_pair)
-  })
-
-  assignment_data = dplyr::left_join(assignment_data, emf_adducts2, by = "isotopologue_IMF")
+  if (remove_s) {
+    s_adducts = grepl("S", assignment_data$complete_EMF)
+    assignment_data = assignment_data[!s_adducts, ]
+  }
 
   lbl_counts = assignment_data[assignment_data$Type %in% "lbl.count", ]
-  split_emf_adduct = split(lbl_counts, lbl_counts$adduct_EMF)
+  split_emf = split(lbl_counts, lbl_counts$complete_EMF)
 
-  keep_emf = purrr::map_lgl(split_emf_adduct, function(in_adduct){
+  keep_emf = purrr::map_lgl(split_emf, function(in_adduct){
     if (sum(in_adduct$Assignment_Data == 0) == 0){
       return(FALSE)
     } else {
@@ -96,13 +88,9 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
     }
   })
 
-  valid_emf = names(split_emf_adduct)[keep_emf]
+  valid_emf = names(keep_emf)[keep_emf]
 
-  if (remove_s) {
-    valid_emf = grep("S", valid_emf, value = TRUE, invert = TRUE)
-  }
-
-  assignment_data = assignment_data[assignment_data$adduct_EMF %in% valid_emf, ]
+  assignment_data = assignment_data[assignment_data$complete_EMF %in% valid_emf, ]
   assignment_data
 }
 
@@ -598,7 +586,7 @@ extract_assignments <- function(assignment_list){
   not_null_entries = !purrr::map_lgl(assignment_list, is.null)
   assignment_list = assignment_list[not_null_entries]
   assignment_df <- as.data.frame(assignment_list)
-  keep_names <- names(assignment_df)[!(names(assignment_df) %in% "isotopologue_IMF")]
+  keep_names <- names(assignment_df)[!(names(assignment_df) %in% c("complete_IMF", "complete_EMF"))]
 
   suppressWarnings(tidyr::gather(assignment_df, key = "Type", value = "Assignment_Data", !!keep_names))
 }
