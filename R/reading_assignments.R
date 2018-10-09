@@ -120,9 +120,9 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #' @return list of matrices and a data.frame
 extract_assigned_data <- function(assigned_data,
                                   sample_peak = "Sample_Peak",
-                                  imf = "isotopologue_IMF",
+                                  imf = "complete_IMF",
                                   e_value = "e_value",
-                                  emf = "isotopologue_EMF",
+                                  emf = "complete_EMF",
                                   sample = "Sample",
                                   mz_diff = "mass_error",
                                   data_col = "Assignment_Data",
@@ -223,7 +223,7 @@ extract_assigned_data <- function(assigned_data,
               tic = get_tic(assigned_data)))
 }
 
-filter_peak_imfs <- function(peak_assignments, imf = "isotopologue_IMF", e_value = "e_value"){
+filter_peak_imfs <- function(peak_assignments, imf = "complete_IMF", e_value = "e_value"){
   e_value <- rlang::enquo(e_value)
   #imf <- rlang::enquo(imf)
 
@@ -320,7 +320,7 @@ choose_single_peak <- function(mz_diff_data, imf = "IMF",
 #' @param e_value which is the e-value column?
 #' @param min_e_value what is the minimum e-value to use?
 #'
-choose_imfs <- function(assignment_data, sample_peak = "Sample_Peak", imf = "isotopologue_IMF",
+choose_imfs <- function(assignment_data, sample_peak = "Sample_Peak", imf = "complete_IMF",
 sample = "Sample", e_value = "e_value", data_col = "Assignment_Data"){
 
   # easy cases, there is only 1 IMF
@@ -402,7 +402,7 @@ sample = "Sample", e_value = "e_value", data_col = "Assignment_Data"){
 
 }
 
-pick_single_evalue <- function(assignment_e_values, sample_peak = "Sample_Peak", imf = "isotopologue_IMF",
+pick_single_evalue <- function(assignment_e_values, sample_peak = "Sample_Peak", imf = "complete_IMF",
                                sample = "Sample", data_col = "Assignment_Data"){
   split_imf <- split(assignment_e_values, paste0(assignment_e_values[, imf], assignment_e_values[, sample]))
 
@@ -449,7 +449,7 @@ median_e_values <- function(e_values){
 #'
 #' @export
 #' @return list of pseudo peaks
-create_sudo_peaks <- function(in_assignments, sample_peak = "Sample_Peak", imf = "isotopologue_IMF"){
+create_sudo_peaks <- function(in_assignments, sample_peak = "Sample_Peak", imf = "complete_IMF"){
   in_assignments$grabbed <- FALSE
 
   peak_index <- 1
