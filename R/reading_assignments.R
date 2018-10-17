@@ -205,7 +205,7 @@ extract_assigned_data <- function(assigned_data,
 
     peak_imf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]]%in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks), c(imf, sample)], use_var = imf, sample = sample)
     imf_matrix[ipeak, names(peak_imf)] <- peak_imf
-    peak_emf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]] %in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks) & (tmp_assignment[["Type"]] %in% emf), c(data_col, sample)], use_var = data_col, sample = sample)
+    peak_emf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]] %in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks), c(emf, sample)], use_var = emf, sample = sample)
     emf_matrix[ipeak, names(peak_emf)] <- peak_emf
   }
 
@@ -213,9 +213,8 @@ extract_assigned_data <- function(assigned_data,
   all_imf <- data.frame(peak = rep(names(peak_2_imf), n_imf), imf = unlist(peak_2_imf),
                         stringsAsFactors = FALSE)
   names(all_imf)[2] <- imf
-  emf_data <- all_assignments[(all_assignments[[imf]] %in% unique(all_imf[[imf]])) & (all_assignments[["Type"]] %in% emf), c(imf, data_col)]
-  names(emf_data)[2] <- emf
-  all_imf <- dplyr::left_join(all_imf, unique(emf_data[, c(imf, emf)]), by = imf)
+  emf_data <- unique(all_assignments[(all_assignments[[imf]] %in% unique(all_imf[[imf]])) , c(imf, emf)])
+  all_imf <- dplyr::left_join(all_imf, emf_data, by = imf)
 
   return(list(mz = mz_matrix, height = height_matrix,
               imf = imf_matrix, emf = emf_matrix,
