@@ -720,7 +720,7 @@ replace_null <- function(in_list, replace_value = NA) {
 #' generates the mapping of `complete_EMF` to `isotopologue_EMF / IMF` for
 #' other uses.
 #'
-#' @param assigned_data list of assigned data files
+#' @param assigned_data lists of assigned data
 #' @param remove_S should formulas containing "S" be removed
 #' @param progress show a progress bar for the main worker
 #'
@@ -744,8 +744,10 @@ complete_emf_mappings = function(assigned_data, remove_S = TRUE, progress = TRUE
   all_assignments = do.call(rbind, all_assignments)
   rownames(all_assignments) = NULL
 
+  all_assignments = unique(all_assignments)
   all_assignments$emf_imf = paste0(all_assignments$complete_EMF, ".", all_assignments$complete_IMF)
   split_assignments = split(all_assignments, all_assignments$emf_imf)
+  #split_assignments = unique(split_assignments)
 
   if (progress) {
     pb = knitrProgressBar::progress_estimated(length(split_assignments))
