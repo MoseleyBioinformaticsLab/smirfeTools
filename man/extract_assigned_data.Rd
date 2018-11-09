@@ -5,11 +5,11 @@
 \title{extract data}
 \usage{
 extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
-  imf = "isotopologue_IMF", e_value = "e_value",
-  emf = "isotopologue_EMF", sample = "Sample",
-  mz_diff = "mass_error", data_col = "Assignment_Data",
-  numeric_values = c("e_value", "mass_error", "NAP", "lbl.count",
-  "clique_size"), observed_mz = "ObservedMZ", height = "Height",
+  imf = "complete_IMF", e_value = "e_value", emf = "complete_EMF",
+  sample = "Sample", mz_diff = "mass_error",
+  data_col = "Assignment_Data", numeric_values = c("e_value",
+  "mass_error", "NAP", "lbl.count", "clique_size"),
+  observed_mz = "ObservedMZ", height = "Height",
   remove_elements = "S", progress = TRUE)
 }
 \arguments{

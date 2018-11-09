@@ -710,3 +710,62 @@ replace_null <- function(in_list, replace_value = NA) {
     }
   })
 }
+
+
+#' Complete EMF mapping
+#'
+#' Everything is reported by `complete_EMF` or `complete_IMF`, which includes
+#' the adducts, to make sure we have unique peaks. However, for some other
+#' work, we actually want the **non-complete** EMF and IMF. This function
+#' generates the mapping of `complete_EMF` to `isotopologue_EMF / IMF` for
+#' other uses.
+#'
+#' @param assigned_data list of assigned data files
+#' @param remove_S should formulas containing "S" be removed
+#' @param progress show a progress bar for the main worker
+#'
+#' @return data.frame
+#' @export
+complete_emf_mappings = function(assigned_data, remove_S = TRUE, progress = TRUE){
+  all_assignments = internal_map$map_function(assigned_data, function(x){
+    tmp_assign = x$assignments
+    tmp_assign = dplyr::filter(tmp_assign,
+                  Type %in% c("isotopologue_EMF",
+                              "isotopologue_IMF"))
+    if (remove_S) {
+      tmp_assign = dplyr::filter(tmp_assign,
+                                 !(grepl("S", complete_EMF)))
+    }
+    tmp_assign = dplyr::select(tmp_assign, -PeakID,
+                  -Sample, -Sample_Peak)
+    tmp_assign = unique(tmp_assign)
+    tmp_assign
+  })
+  all_assignments = do.call(rbind, all_assignments)
+  rownames(all_assignments) = NULL
+
+  all_assignments$emf_imf = paste0(all_assignments$complete_EMF, ".", all_assignments$complete_IMF)
+  split_assignments = split(all_assignments, all_assignments$emf_imf)
+
+  if (progress) {
+    pb = knitrProgressBar::progress_estimated(length(split_assignments))
+  } else {
+    pb = NULL
+  }
+
+  spread_assignments = purrr::map_dfr(split_assignments, function(in_assign, .pb){
+    knitrProgressBar::update_progress(.pb)
+    if (nrow(in_assign) == 2) {
+      return(tidyr::spread(in_assign, Type, Assignment_Data))
+    } else {
+      assign_index = seq(1, nrow(in_assign)-1, 2)
+      out_assign = purrr::map_df(assign_index, function(in_index){
+        tidyr::spread(in_assign[in_index:(in_index + 1), ],
+                      Type, Assignment_Data)
+
+      })
+      return(out_assign)
+    }
+  }, pb)
+  spread_assignments
+}

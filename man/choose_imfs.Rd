@@ -5,7 +5,7 @@
 \title{decide on IMFs}
 \usage{
 choose_imfs(assignment_data, sample_peak = "Sample_Peak",
-  imf = "isotopologue_IMF", sample = "Sample", e_value = "e_value",
+  imf = "complete_IMF", sample = "Sample", e_value = "e_value",
   data_col = "Assignment_Data")
 }
 \arguments{

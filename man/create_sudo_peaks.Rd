@@ -5,7 +5,7 @@
 \title{create pseudo peak}
 \usage{
 create_sudo_peaks(in_assignments, sample_peak = "Sample_Peak",
-  imf = "isotopologue_IMF")
+  imf = "complete_IMF")
 }
 \arguments{
 \item{in_assignments}{the table of all assignments from all samples}
