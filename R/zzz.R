@@ -17,3 +17,7 @@ set_internal_map <- function(map_function = NULL){
 
 internal_map <- new.env(hash = TRUE)
 assign("map_function", purrr::map, envir = internal_map)
+
+.onLoad <- function(libname, pkgname) {
+  debugme::debugme()
+}

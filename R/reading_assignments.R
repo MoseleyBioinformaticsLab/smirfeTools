@@ -591,6 +591,7 @@ extract_assignments <- function(assignment_list){
 }
 
 extract_peak_data <- function(single_peak_list){
+  "!DEBUG PeakID = `single_peak_list$PeakID`"
   assignments <- single_peak_list$Assignments
   single_peak_list$Assignments <- NULL
   if (!is.null(single_peak_list$type)) {
