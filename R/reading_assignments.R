@@ -47,7 +47,8 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
 }
 
 get_tic <- function(assigned_data){
-  tic <- purrr::map_dbl(assigned_data, "tic")
+  tic <- purrr::map(assigned_data, "tic")
+  tic = unlist(purrr::map(tic, as.double))
   names(tic) <- purrr::map_chr(assigned_data, "sample")
   tic
 }
