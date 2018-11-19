@@ -7,7 +7,7 @@
 complete_emf_mappings(assigned_data, remove_S = TRUE, progress = TRUE)
 }
 \arguments{
-\item{assigned_data}{list of assigned data files}
+\item{assigned_data}{lists of assigned data}
 
 \item{remove_S}{should formulas containing "S" be removed}
 
