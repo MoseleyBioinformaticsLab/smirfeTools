@@ -122,7 +122,9 @@ decide_emf_peaks = function(emf_peaks){
         x
       })
     } else {
-      out_emf = dplyr::filter(in_emf, -k_iso)
+      in_emf$k_iso = NULL
+      out_emf = list(in_emf)
+      #names(out_emf) = in_emf[1, "complete_EMF"]
     }
 
     out_emf
@@ -131,34 +133,38 @@ decide_emf_peaks = function(emf_peaks){
   if (sum(has_k) >= 1) {
     tmp_k = purrr::map(split_by_emf[has_k], check_n_k_isotopes)
     tmp_k = unlist(tmp_k, recursive = FALSE)
-
     split_by_emf = c(split_by_emf[!has_k], tmp_k)
   }
 
-  emf_imf_info = purrr::imap_dfr(split_by_emf, function(.x, .y){
-    max_imf = max(.x$C13) + 1
-    n_imf = length(unique(.x$peak))
+  if (length(split_by_emf) > 1) {
+    emf_imf_info = purrr::imap_dfr(split_by_emf, function(.x, .y){
+      max_imf = max(.x$C13) + 1
+      n_imf = length(unique(.x$peak))
 
-    dist_matrix = matrix(0L, nrow = 2, ncol = max_imf)
-    dist_matrix[1, ] = 1
-    dist_matrix[2, .x$C13+1] = 1
-    diff_imf = dist(dist_matrix)
-    data.frame(n = n_imf, diff = diff_imf[1], emf = .y, stringsAsFactors = FALSE)
-  })
+      dist_matrix = matrix(0L, nrow = 2, ncol = max_imf)
+      dist_matrix[1, ] = 1
+      dist_matrix[2, .x$C13+1] = 1
+      diff_imf = dist(dist_matrix)
+      data.frame(n = n_imf, diff = diff_imf[1], emf = .y, stringsAsFactors = FALSE)
+    })
 
-  emf_imf_info = dplyr::filter(emf_imf_info, diff == min(diff))
+    emf_imf_info = dplyr::filter(emf_imf_info, diff == min(diff))
 
-  use_emfs = dplyr::filter(emf_imf_info, n == max(n))
+    use_emfs = dplyr::filter(emf_imf_info, n == max(n))
 
-  keep_emfs = purrr::map_df(split_by_emf[use_emfs$emf], ~ .x)
+    keep_emfs = purrr::map_df(split_by_emf[use_emfs$emf], ~ .x)
 
-  n_peak = length(unique(keep_emfs$peak))
+    n_peak = length(unique(keep_emfs$peak))
 
-  if (n_peak == use_emfs[1, "n"]) {
-    out_emfs = keep_emfs
+    if (n_peak == use_emfs[1, "n"]) {
+      out_emfs = keep_emfs
+    } else {
+      out_emfs = keep_emfs[0, ]
+    }
   } else {
-    out_emfs = keep_emfs[0, ]
+    out_emfs = split_by_emf
   }
+
   out_emfs
 }
 
