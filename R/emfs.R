@@ -12,14 +12,13 @@
 #'
 #' @return data.frame
 #' @export
-#'
-#' @examples
 group_emfs_by_peaks = function(peak_info, peak_var = "peak", emf_var = "complete_EMF",
                                grouping_var = "grouped_EMF"){
   split_emfs = split(peak_info[, peak_var], peak_info[, emf_var])
 
   emf_list = vector("list", length(split_emfs))
 
+  # this finds the formulas that share identical sets of peaks
   save_emf = 1
   save_index = 1
   while (length(split_emfs) > 0) {
@@ -47,9 +46,68 @@ group_emfs_by_peaks = function(peak_info, peak_var = "peak", emf_var = "complete
                                    stringsAsFactors = FALSE)
   names(grouped_emf_mapping) = c(grouping_var, emf_var)
 
-  peak_info = dplyr::left_join(peak_info, grouped_emf_mapping, by = emf_var)
-  peak_info
+  peak_info_gemf = dplyr::left_join(peak_info, grouped_emf_mapping, by = emf_var)
+
+  # now we need to find those grouped EMFs that *share* peaks. This is a no-no, because
+  # peaks can't be part of two EMFs. The solution right now is to keep the EMF with the
+  # most peaks, and remove the other EMFs.
+  split_gemfs = split(peak_info_gemf, peak_info_gemf[, grouping_var])
+  gemfs_df = purrr::map_df(split_gemfs, ~ unique(.x[, c(peak_var, grouping_var)]))
+  names(gemfs_df) = c("peak", "group")
+
+  gemfs_merge = dplyr::left_join(gemfs_df, gemfs_df, by = "peak", suffix = c(".1", ".2"))
+
+  gemfs_notequal = gemfs_merge[(gemfs_merge$group.1 != gemfs_merge$group.2), ]
+
+  if (nrow(gemfs_notequal) > 0) {
+
+    gemfs_compare = vector("list", nrow(gemfs_notequal))
+    compare_loc = 1
+    while (nrow(gemfs_notequal) > 0) {
+      init_gemfs = unique(unlist(gemfs_notequal[1, c("group.1", "group.2")], use.names = FALSE))
+      more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, group.1 %in% init_gemfs, group.2 %in% init_gemfs)[, c("group.1", "group.2")], use.names = FALSE))
+      while (all(more_gemfs != init_gemfs)) {
+        init_gemfs = more_gemfs
+        more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, group.1 %in% init_gemfs, group.2 %in% init_gemfs)[, c("group.1", "group.2")], use.names = FALSE))
+      }
+      gemfs_compare[[compare_loc]] = more_gemfs
+      compare_loc = compare_loc + 1
+      gemfs_notequal = gemfs_notequal[!((gemfs_notequal$group.1 %in% more_gemfs) | (gemfs_notequal$group.2 %in% more_gemfs)), ]
+    }
+
+    n_merge = purrr::map_int(gemfs_compare, length)
+    gemfs_compare = gemfs_compare[n_merge > 0]
+
+    gemfs_df_npeak = purrr::map_int(split(gemfs_df$peak, gemfs_df$group), ~ length(.x))
+
+    gemfs_compare_keep = purrr::map_chr(gemfs_compare, function(compare_group){
+      gemfs_count = gemfs_df_npeak[compare_group]
+      names(gemfs_count)[which.max(gemfs_count)]
+    })
+
+    not_equal = unique(unlist(gemfs_compare, use.names = FALSE))
+
+    all_emfs = names(emf_list)
+    keep_emfs = unique(c(setdiff(all_emfs, not_equal), gemfs_compare_keep))
+    emf_list2 = emf_list[keep_emfs]
+    names(emf_list2) = paste0("GEMF.", seq_along(emf_list2))
+
+    n_emf2 = purrr::map_int(emf_list2, length)
+
+    grouped_emf_mapping2 = data.frame(v1 = rep(names(emf_list2), n_emf2),
+                                     v2 = unlist(emf_list2, use.names = FALSE),
+                                     stringsAsFactors = FALSE)
+    names(grouped_emf_mapping2) = c(grouping_var, emf_var)
+
+    peak_info_gemf2 = dplyr::left_join(peak_info, grouped_emf_mapping2, by = emf_var)
+    peak_info_gemf2 = peak_info_gemf2[!is.na(peak_info_gemf2[, grouping_var]), ]
+
+    peak_info_gemf = peak_info_gemf2
+
+  }
+  peak_info_gemf
 }
+
 
 #' Count Carbon 13s
 #'
@@ -162,7 +220,7 @@ decide_emf_peaks = function(emf_peaks){
       out_emfs = keep_emfs[0, ]
     }
   } else {
-    out_emfs = split_by_emf
+    out_emfs = split_by_emf[[1]]
   }
 
   out_emfs
@@ -190,4 +248,62 @@ cleanup_na_categories = function(grouped_emf){
     return(grouped_emf)
   }
 
+}
+
+#' keep EMFs with matching features
+#'
+#' Given a set of features of interest, and a set of decided EMFs, goes through
+#' and returns the full EMFs that contain any of the features of interest. Also
+#' attempts to return as few classes of EMFs as possible.
+#'
+#' @param features a set of interesting features
+#' @param emf_info data.frame of EMFs, including the lipid class information
+#'
+#' @export
+#' @return list
+keep_emfs_with_features = function(features, emf_info){
+  peak_info = dplyr::filter(emf_info, peak %in% features,
+                               !(is.na(PredictedCategories)) | !(is.na(Categories)),
+                               !(PredictedCategories %in% "not_lipid"))
+  peak_gemfs = dplyr::filter(emf_info, grouped_EMF %in% unique(peak_info$grouped_EMF))
+
+  peak_gemfs_split = base::split(peak_gemfs, peak_gemfs$complete_EMF)
+
+  peak_gemfs_split = purrr::map(peak_gemfs_split, cleanup_na_categories)
+
+  peak_gemfs_ncategory = purrr::map_int(peak_gemfs_split, ~ length(unique(.x$PredictedCategories)))
+
+  peak_gemfs_split = peak_gemfs_split[peak_gemfs_ncategory == 1]
+}
+
+#' Get EMF sums
+#'
+#' @param split_emfs list of EMF data.frames
+#' @param feature_intensities matrix of feature (rows) by sample (column) intensities
+#' @param feature_mz matrix of M/Z values
+#' @param multiply_C13 should the intensities be multiplied by the C13 incorporation? (FALSE)
+#'
+#' @importFrom dplyr "%>%"
+#' @export
+#' @return list
+get_emf_intensity_sums = function(split_emfs, feature_intensities, feature_mz, multiply_C13 = FALSE){
+
+  emf_data = list(sums = purrr::map(split_emfs, function(in_emf){
+    if (multiply_C13){
+      c13_vals = in_emf$C13
+    } else {
+      c13_vals = rep(1, nrow(in_emf))
+    }
+    colSums(feature_intensities[in_emf$peak, , drop = FALSE] * c13_vals)
+  }) %>% do.call(base::rbind, .),
+  classes = purrr::map_df(split_emfs, function(in_emf){
+    dplyr::select(in_emf, complete_EMF, PredictedClasses,
+                  PredictedCategories, Categories, Classes) %>%
+      dplyr::sample_n(., 1)}) %>%
+    dplyr::mutate(., mz = purrr::map_dbl(split_emfs, function(in_emf){
+                    use_peak = in_emf$peak[in_emf$C13 == min(in_emf$C13)]
+                    min(feature_mz[use_peak, ], na.rm = TRUE)
+                  }))
+  )
+  emf_data
 }
