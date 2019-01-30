@@ -4,10 +4,11 @@
 #'
 #' @param classification_file the file to read from
 #' @param fix_json properly format the JSON so the JSON parser can read it?
+#' @param rm_na_formula remove those entries that have a formula entry of `NA`??
 #'
 #' @return data.frame
 #' @export
-import_emf_classifications = function(classification_file, fix_json = TRUE){
+import_emf_classifications = function(classification_file, fix_json = TRUE, rm_na_formula = TRUE){
   if (fix_json) {
     emf_json = gsub("None", "null",
                     gsub("'", '"',
@@ -26,15 +27,26 @@ import_emf_classifications = function(classification_file, fix_json = TRUE){
   class_tmp_df = as.data.frame(class_list)
 
   class_data <- purrr::map_df(emf_classes, function(in_list){
+    message(in_list$SortedFormula)
     length_data <- purrr::map_int(in_list, length)
-    tmp_df = class_tmp_df
-    if ((length_data["Categories"] != 0) || (length_data["PredictedCategories"] != 0)) {
-      in_list <- in_list[length_data > 0]
-      tmp_df[1, names(in_list)] = in_list
-    }
+    max_length = max(length_data)
+    in_list = in_list[length_data > 0]
 
+    in_list = purrr::map(in_list, function(x){
+      if (length(x) == 1) {
+        rep(x, max_length)
+      } else {
+        sort(c(x, rep(NA, max_length - length(x))), na.last = TRUE)
+      }
+    })
+    tmp_df = purrr::map_df(seq(1, max_length), ~ class_tmp_df)
+    tmp_df[, names(in_list)] <- in_list
+    #print(warnings())
     tmp_df
   })
-  class_data = dplyr::filter(class_data, !(is.na(Formula)))
+  if (rm_na_formula) {
+    class_data = dplyr::filter(class_data, !(is.na(Formula)))
+  }
+
   class_data
 }
