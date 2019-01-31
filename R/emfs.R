@@ -262,9 +262,7 @@ cleanup_na_categories = function(grouped_emf){
 #' @export
 #' @return list
 keep_emfs_with_features = function(features, emf_info){
-  peak_info = dplyr::filter(emf_info, peak %in% features,
-                               !(is.na(PredictedCategories)) | !(is.na(Categories)),
-                               !(PredictedCategories %in% "not_lipid"))
+  peak_info = dplyr::filter(emf_info, peak %in% features)
   peak_gemfs = dplyr::filter(emf_info, grouped_EMF %in% unique(peak_info$grouped_EMF))
 
   peak_gemfs_split = base::split(peak_gemfs, peak_gemfs$complete_EMF)
