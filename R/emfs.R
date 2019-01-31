@@ -65,10 +65,10 @@ group_emfs_by_peaks = function(peak_info, peak_var = "peak", emf_var = "complete
     compare_loc = 1
     while (nrow(gemfs_notequal) > 0) {
       init_gemfs = unique(unlist(gemfs_notequal[1, c("group.1", "group.2")], use.names = FALSE))
-      more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, group.1 %in% init_gemfs, group.2 %in% init_gemfs)[, c("group.1", "group.2")], use.names = FALSE))
-      while (all(more_gemfs != init_gemfs)) {
+      more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, (group.1 %in% init_gemfs) | (group.2 %in% init_gemfs))[, c("group.1", "group.2")], use.names = FALSE))
+      while (!all(more_gemfs %in% init_gemfs)) {
         init_gemfs = more_gemfs
-        more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, group.1 %in% init_gemfs, group.2 %in% init_gemfs)[, c("group.1", "group.2")], use.names = FALSE))
+        more_gemfs = unique(unlist(dplyr::filter(gemfs_notequal, (group.1 %in% init_gemfs) | (group.2 %in% init_gemfs))[, c("group.1", "group.2")], use.names = FALSE))
       }
       gemfs_compare[[compare_loc]] = more_gemfs
       compare_loc = compare_loc + 1
