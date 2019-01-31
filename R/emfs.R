@@ -240,9 +240,9 @@ decide_emf_peaks = function(emf_peaks){
 #' @export
 #' @return data.frame
 cleanup_na_categories = function(grouped_emf){
-  pred_na = dplyr::filter(grouped_emf, !is.na(PredictedCategories), !is.na(Categories))
+  pred_na = dplyr::filter(grouped_emf, !is.na(PredictedCategories))
 
-  if (length(unique(pred_na$peak)) == length(unique(grouped_emf$peak))) {
+  if ((length(unique(pred_na$peak)) == length(unique(grouped_emf$peak))) || (nrow(pred_na) == 0)) {
     return(pred_na)
   } else {
     return(grouped_emf)
