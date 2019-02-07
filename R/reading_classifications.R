@@ -27,7 +27,7 @@ import_emf_classifications = function(classification_file, fix_json = TRUE, rm_n
   class_tmp_df = as.data.frame(class_list)
 
   class_data <- purrr::map_df(emf_classes, function(in_list){
-    message(in_list$SortedFormula)
+    #message(in_list$SortedFormula)
     length_data <- purrr::map_int(in_list, length)
     max_length = max(length_data)
     in_list = in_list[length_data > 0]
