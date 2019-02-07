@@ -4,12 +4,15 @@
 \alias{import_emf_classifications}
 \title{Import EMF Classifications}
 \usage{
-import_emf_classifications(classification_file, fix_json = TRUE)
+import_emf_classifications(classification_file, fix_json = TRUE,
+  rm_na_formula = TRUE)
 }
 \arguments{
 \item{classification_file}{the file to read from}
 
 \item{fix_json}{properly format the JSON so the JSON parser can read it?}
+
+\item{rm_na_formula}{remove those entries that have a formula entry of \code{NA}??}
 }
 \value{
 data.frame
