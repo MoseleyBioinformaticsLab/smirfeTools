@@ -9,6 +9,8 @@
 #'
 #' @export
 #' @return double
+# Copyright Johan DeJong, 2015
+# Source https://johanndejong.wordpress.com/2015/10/02/faster-hamming-distance-in-r-2/
 hamming <- function(X, Y) {
   if ( missing(Y) ) {
     uniqs <- unique(as.vector(X))
