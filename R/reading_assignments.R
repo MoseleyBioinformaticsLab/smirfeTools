@@ -586,7 +586,7 @@ extract_assignments <- function(assignment_list){
   not_null_entries = !purrr::map_lgl(assignment_list, is.null)
   assignment_list = assignment_list[not_null_entries]
   assignment_df <- as.data.frame(assignment_list)
-  keep_names <- names(assignment_df)[!(names(assignment_df) %in% c("complete_IMF", "complete_EMF"))]
+  keep_names <- names(assignment_df)[!(names(assignment_df) %in% c("complete_IMF", "complete_EMF", "adduct_IMF"))]
 
   suppressWarnings(tidyr::gather(assignment_df, key = "Type", value = "Assignment_Data", !!keep_names))
 }
