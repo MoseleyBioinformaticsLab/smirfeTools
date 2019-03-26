@@ -78,6 +78,11 @@ group_emfs_by_peaks = function(peak_info, peak_var = "peak", emf_var = "complete
     n_merge = purrr::map_int(gemfs_compare, length)
     gemfs_compare = gemfs_compare[n_merge > 0]
 
+    count_peaks_lost = purrr::map_int(gemfs_compare, function(in_compare){
+      tmp_matrix = create_peaks_2_emf(split_gemfs[in_compare])
+      calculate_peaks_lost(tmp_matrix)
+    })
+
     gemfs_df_npeak = purrr::map_int(split(gemfs_df$peak, gemfs_df$group), ~ length(.x))
 
     gemfs_compare_keep = purrr::map_chr(gemfs_compare, function(compare_group){
@@ -108,6 +113,72 @@ group_emfs_by_peaks = function(peak_info, peak_var = "peak", emf_var = "complete
   peak_info_gemf
 }
 
+create_peaks_2_emf = function(emf_list){
+  emf_peaks = purrr::map(emf_list, ~ unique(.x$peak))
+  all_peaks = unique(unlist(emf_peaks, use.names = FALSE))
+
+  peak_matrix = matrix(0, nrow = length(all_peaks), ncol = length(emf_list))
+  colnames(peak_matrix) = names(emf_list)
+  rownames(peak_matrix) = all_peaks
+
+  for (i_emf in names(emf_list)) {
+    peak_matrix[unique(emf_list[[i_emf]]$peak), i_emf] = 1
+  }
+  peak_matrix
+}
+
+calculate_peaks_lost = function(peak_matrix){
+  biggest_emf = which.max(colSums(peak_matrix))
+
+  missing_peaks = (rowSums(peak_matrix) > 0) & (peak_matrix[, biggest_emf] == 0)
+  n_peak = sum(missing_peaks)
+  n_peak
+}
+
+find_non_zeros = function(peak_matrix){
+  purrr::map_dbl(seq(1, nrow(peak_matrix)), function(x){
+    tmp_loc = which(peak_matrix[x, ] > 0)
+    if (length(tmp_loc) == 0) {
+      tmp_loc = 0
+    }
+    tmp_loc
+  })
+}
+
+permuate_peak_matrix = function(peak_matrix){
+  peak_sums = rowSums(peak_matrix)
+  peak_matrix = peak_matrix[order(peak_sums), ]
+  peak_sums = peak_sums[order(peak_sums)]
+
+  modify_rows = which(peak_sums > 1)
+
+  mod_locs = purrr::map(modify_rows, ~ which(mod_matrix[.x, ] > 0))
+
+  mod_matrix = peak_matrix
+
+  # set all the multi EMF peaks to 0 for a baseline
+  for (irow in names(mod_locs)) {
+    mod_matrix[irow, ] = 0
+  }
+
+  score_zero = score_function(mod_matrix)
+  zero_permutation = find_non_zeros(mod_matrix)
+
+  # introduce each row, keeping the others zero
+  zero_matrix = mod_matrix
+  score_permutations = list()
+  for (irow in names(mod_locs)) {
+    use_locs = mod_locs[[irow]]
+    for (icol in use_locs) {
+      zero_matrix[irow, icol] = 1
+      score_permutations = c(score_permuations, list(score = score_function(zero_matrix),
+                                                     permutation = find_non_zeros(zero_matrix)))
+      zero_matrix[irow, ] = 0
+    }
+  }
+  # after this, we need to hold one row constant, and then permute all the other rows above and below it
+
+}
 
 #' Count Carbon 13s
 #'
