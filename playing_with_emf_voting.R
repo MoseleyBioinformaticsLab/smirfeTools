@@ -2,6 +2,10 @@
 library(dplyr)
 assigned_data = readRDS("unlabeled_example_zaytseva_pdx.rds")
 
+# I should extract all of the e-values, and see if I should be filtering out the 0.99, and see how the
+# multiple mapping drops.
+# I should also be asking how many of the grouped EMFs have different numbers of peaks across samples...
+
 get_sample_emfs = function(sample_assignments, sample_id){
   sample_assignments = dplyr::mutate(sample_assignments, emf.adduct = paste0(complete_EMF, ".", adduct_IMF))
 
@@ -25,7 +29,7 @@ get_sample_emfs = function(sample_assignments, sample_id){
     )
   })
 
-  names(grouped_emf_peaks) = paste0("GEMF.", sample_id, ".", seq_along(grouped_emf_peaks))
+  names(grouped_emf_peaks) = paste0("GEMF_", seq_along(grouped_emf_peaks), ".", sample_id)
 
   emf_by_emf = purrr::map_dfr(grouped_emf_peaks, function(x){
     purrr::map_dfr(x$peak_info, ~ data.frame(emf.adduct = .x$emf.adduct[1],
@@ -49,6 +53,7 @@ get_sample_emfs = function(sample_assignments, sample_id){
   multi_evidence_emf = multi_evidence_emf[purrr::map_lgl(multi_evidence_emf, ~ !is.null(.x))]
 
   return(list(grouped_emf = grouped_emf_peaks, multi_evidence = multi_evidence_emf))
+  # we should add the peaks to GEMF mapping here, so we can do what is noted on the last line.
 }
 
 library(furrr)
@@ -99,5 +104,58 @@ all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FA
 all_multi_evidence = purrr::map_dfr(within_sample_emfs, ~ purrr::map_dfr(.x$multi_evidence, ~.x)) %>%
   split(., .$isotopologue_EMF)
 
+
+emf_peak_mapping = purrr::map2_dfr(all_gemfs, names(all_gemfs), function(.x, .y){
+  data.frame(emf = .y, peaks = .x$peaks_chr, stringsAsFactors = FALSE)
+})
 # work with a single sudo emf
-single_sudo = sudo_emf_list[[1]]
+single_sudo = sudo_emf_list[[2]]
+
+grouped_emfs = all_gemfs[single_sudo$grouped_emf]
+
+extract_e_value_mass_error = function(peak_info, gemf_id, best_evalue = FALSE){
+  evalue_masserror = dplyr::filter(peak_info, Type %in% c("e_value", "mass_error", "PeakID", "Sample_Peak", "clique_size")) %>%
+    tidyr::spread(Type, Assignment_Data) %>% dplyr::mutate(grouped_emf = gemf_id)
+
+  if (best_evalue) {
+    evalue_masserror = dplyr::slice(evalue_masserror, which.min(e_value))
+  }
+
+  evalue_masserror
+}
+
+# this function does not account for the fact that a peak may be mapped to several EMFs
+# This is merely to choose amongst a number of EMFs that may be possible for a single set
+# of peaks
+choose_emf = function(grouped_emfs, single_sudo){
+  n_emfs = rle(sort(single_sudo$emf.adduct))
+  # everybody only has one result, awesome!
+  prop_emfs = n_emfs$lengths / sum(n_emfs$lengths)
+  if (max(prop_emfs) > 0.8) {
+    use_emf = n_emfs$values[(prop_emfs == max(prop_emfs))]
+  } else {
+    use_emf = n_emfs$values
+  }
+  if (length(use_emf) > 1) {
+    # now see if we can resolve multiple EMFs based on their mass error and e-values
+    emf_data = purrr::map2_df(grouped_emfs, names(grouped_emfs), function(.x, .y){
+      purrr::map2_df(.x$peak_info, .y, extract_e_value_mass_error, best_evalue = TRUE)
+    })
+  }
+
+}
+
+observed_mz = purrr::map_df(assigned_data, ~ .x$data %>% dplyr::filter(Measurement %in% "ObservedMZ"))
+all_evalues = purrr::map2_df(all_gemfs, names(all_gemfs), function(.x, .y){
+  purrr::map2_df(.x$peak_info, .y, extract_e_value_mass_error, best_evalue = TRUE)
+})
+
+sudo_evalues = furrr::future_map_dfr(sudo_emf_list, function(.x){
+  dplyr::filter(all_evalues, grouped_emf %in% .x$grouped_emf) %>%
+    split(., .$grouped_emf) %>% purrr::map_df(., ~ dplyr::slice(.x, which.min(e_value)))
+})
+
+sudo_evalues_mz = dplyr::left_join(sudo_evalues, observed_mz[, c("Sample_Peak", "Value")], by = "Sample_Peak") %>%
+  dplyr::mutate(e_value = as.numeric(e_value))
+
+ggplot(sudo_evalues_mz, aes(x = Value, y = e_value)) + geom_point()
