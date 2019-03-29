@@ -126,6 +126,17 @@ all_multi_evidence = purrr::map_dfr(within_sample_emfs, ~ purrr::map_dfr(.x$mult
   split(., .$isotopologue_EMF)
 
 
+extract_e_value_mass_error = function(peak_info, gemf_id, best_evalue = FALSE){
+  evalue_masserror = dplyr::filter(peak_info, Type %in% c("e_value", "mass_error", "PeakID", "Sample_Peak", "clique_size")) %>%
+    tidyr::spread(Type, Assignment_Data) %>% dplyr::mutate(grouped_emf = gemf_id)
+
+  if (best_evalue) {
+    evalue_masserror = dplyr::slice(evalue_masserror, which.min(e_value))
+  }
+
+  evalue_masserror
+}
+
 emf_peak_mapping = purrr::map2_dfr(all_gemfs, names(all_gemfs), function(.x, .y){
   data.frame(emf = .y, peaks = .x$peaks_chr, stringsAsFactors = FALSE)
 })
