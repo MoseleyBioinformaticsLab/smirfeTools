@@ -305,9 +305,17 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
   non_null_samples = sort(unique(gemf_emf$sample[!has_null_peaks]))
 
   missing_samples = setdiff(original_samples, non_null_samples)
+  trimmed_gemf_emf = gemf_emf[!is.na(gemf_emf$e_value), ]
   if (length(missing_samples) > 0) {
     has_imf = purrr::map_df(gemf_emf[gemf_emf$sample %in% non_null_samples, "info"], ~ .x)
-    missing_imf = purrr::map(gemf_emf[(gemf_emf$sample %in% missing_samples), "peaks"], ~ .x)
+    missing_imf = purrr::map(missing_samples, function(.x){
+      tmp_gemf_emf = gemf_emf[(gemf_emf$sample %in% .x), ]
+      split_tmp = split(tmp_gemf_emf, tmp_gemf_emf[, "grouped_emf"])
+      purrr::map(split_tmp, function(single_emf){
+        data.frame(Peaks = single_emf$peaks[[1]], Sample = single_emf$sample,
+                   grouped_emf = single_emf$grouped_emf)
+      })
+    })
     names(missing_imf) = missing_samples
 
     imf_by_emf = split(has_imf, has_imf$emf_Adduct)
@@ -318,7 +326,10 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
     imf_matches = imf_matches[!is.na(imf_matches$complete_IMF), ]
 
     if (nrow(imf_matches) > 0) {
-
+      split_matches = split(imf_matches, imf_matches[, c("Sample", "emf_Adduct")])
+      missing_df = purrr::map(split_matches, function(missing_info){
+        possible_match = gemf_emf[(gemf_emf$sample %in% missing_info$Sample[1]) && (gemf_emf$emf %in% missing_info$emf_Adduct[1]), ]
+      })
     }
   }
 
