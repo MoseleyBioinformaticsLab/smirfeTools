@@ -213,26 +213,46 @@ by_sample = data.frame(grouped_emf = unique(single_sudo$grouped_emf), stringsAsF
 #' @return data.frame
 #' @export
 match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
-  mean_mz = purrr::map_dbl(split(imf_2_peak$Sample_Peak, imf_2_peak$complete_IMF),
-                       ~ mean(peak_mz[peak_mz$Sample_Peak %in% .x, "Value"]))
+  split_peaks_imf = split(imf_2_peak$Sample_Peak, imf_2_peak$complete_IMF)
+  mean_mz = purrr::map2_dfr(split_peaks_imf, names(split_peaks_imf),
+                            function(.x, .y){
+                              use_mz = peak_mz[peak_mz$Sample_Peak %in% .x, "Value"]
+                              data.frame(complete_IMF = .y,
+                                         mean = mean(use_mz),
+                                         sd = 2*sd(use_mz),
+                                         stringsAsFactors = FALSE)
+                            })
+  mean_mz = dplyr::mutate(mean_mz, ppm = mean / 1e6)
+  mean_mz = dplyr::mutate(mean_mz, sd2 = dplyr::case_when(sd > ppm ~ ppm,
+                                                          sd <= ppm ~ sd))
 
   match_mz = purrr::map_df(unknown_peaks, function(test_peak){
     test_mz = dplyr::filter(peak_mz, Sample_Peak %in% test_peak)
-    diff_mz = abs(test_mz$Value - mean_mz)
-    match_imf = data.frame(complete_IMF = names(diff_mz)[which.min(diff_mz)],
-                           PeakID = test_mz$PeakID,
-                           Sample = test_mz$Sample,
-                           Sample_Peak = test_peak,
-                           emf_Adduct = imf_2_peak$emf_Adduct[1],
-                           diff_mz = diff_mz[which.min(diff_mz)],
-                           stringsAsFactors = FALSE,
-                           row.names = FALSE)
+    tmp_mean = mean_mz %>% dplyr::mutate(diff = abs(mean - test_mz$Value)) %>%
+      dplyr::filter(diff <= sd2)
+
+    if (nrow(tmp_mean) > 0) {
+      tmp_mean = dplyr::slice(tmp_mean, which.min(diff))
+      match_imf = data.frame(complete_IMF = tmp_mean$complete_IMF,
+                             PeakID = test_mz$PeakID,
+                             Sample = test_mz$Sample,
+                             Sample_Peak = test_peak,
+                             emf_Adduct = imf_2_peak$emf_Adduct[1],
+                             stringsAsFactors = FALSE)
+    } else {
+      match_imf = data.frame(complete_IMF = as.character(NA),
+                             PeakID = NA,
+                             Sample = as.character(NA),
+                             Sample_peak = as.character(NA),
+                             emf_Adduct = as.character(NA),
+                             stringsAsFactors = FALSE)
+    }
+    match_imf
   })
 
+  match_mz = match_mz[!is.na(match_mz$PeakID), ]
   # check if each row is unique, which means we have 1-1 peak to IMF
-  if (length(unique(match_mz$complete_IMF)) == nrow(match_mz)) {
-    match_mz$diff_mz = NULL
-  } else {
+  if (!(length(unique(match_mz$complete_IMF)) == nrow(match_mz))) {
     match_mz = match_mz[1,]
     match_mz[1, ] = NA
   }
@@ -295,8 +315,13 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
     imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
       match_imf_by_mz(x[[1]], x[[2]], peak_mz)
     })
+    imf_matches = imf_matches[!is.na(imf_matches$complete_IMF), ]
+
+    if (nrow(imf_matches) > 0) {
+
+    }
   }
-  gemf_emf
+
 
 }
 
