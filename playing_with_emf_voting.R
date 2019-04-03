@@ -244,9 +244,9 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
                              stringsAsFactors = FALSE)
     } else {
       match_imf = data.frame(complete_IMF = as.character(NA),
-                             PeakID = NA,
+                             PeakID = as.integer(NA),
                              Sample = as.character(NA),
-                             Sample_peak = as.character(NA),
+                             Sample_Peak = as.character(NA),
                              emf_Adduct = as.character(NA),
                              stringsAsFactors = FALSE)
     }
@@ -265,7 +265,7 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
   out_evalues$info = list(match_mz)
   out_evalues$peaks = list(match_mz$Sample_Peak)
   out_evalues$sample = match_mz$Sample[1]
-  out_evalues$grouped_emf = unknown_peaks$grouped_emf[1]
+  out_evalues$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
 
   out_evalues
 }
@@ -301,46 +301,54 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
 
       e_values$peaks = list(.x$Sample_Peak)
       e_values$sample = sample_from_grouped_emf
-      e_values$grouped_emf = .y
+      e_values$grouped_emf = as.character(.y)
     } else {
       e_values = null_evalue
       e_values$info = vector(mode = "list", length = nrow(e_values))
       e_values$peaks = list(.x$Sample_Peak)
       e_values$sample = sample_from_grouped_emf
-      e_values$grouped_emf = .y
+      e_values$grouped_emf = as.character(.y)
     }
     e_values
   })
-  has_null_peaks = purrr::map_lgl(gemf_emf$e_value, is.na)
-  original_samples = sort(unique(gemf_emf$sample))
-  non_null_samples = sort(unique(gemf_emf$sample[!has_null_peaks]))
+  na_evalues = purrr::map_lgl(gemf_emf$e_value, is.na)
 
-  missing_samples = setdiff(original_samples, non_null_samples)
-  trimmed_gemf_emf = gemf_emf[!is.na(gemf_emf$e_value), ]
-  if (length(missing_samples) > 0) {
-    has_imf = purrr::map_df(gemf_emf[gemf_emf$sample %in% non_null_samples, "info"], ~ .x)
-    missing_imf = purrr::map(missing_samples, function(.x){
-      tmp_gemf_emf = gemf_emf[(gemf_emf$sample %in% .x), ]
-      split_tmp = split(tmp_gemf_emf, tmp_gemf_emf[, "grouped_emf"])
-      purrr::map(split_tmp, function(single_emf){
-        data.frame(Peaks = single_emf$peaks[[1]], Sample = single_emf$sample,
-                   grouped_emf = single_emf$grouped_emf)
+  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$peaks[!na_evalues], ~ .x), use.names = FALSE))
+
+  if (sum(na_evalues) > 0) {
+    trimmed_gemf_emf = gemf_emf[!na_evalues, ]
+    missing_imf = purrr::map(which(na_evalues), function(.x){
+      tmp_df = data.frame(Peaks = as.character(gemf_emf$peaks[[.x]]), Sample = gemf_emf$sample[.x],
+                 grouped_emf = gemf_emf$grouped_emf[.x])
+      if (all(tmp_df$Peaks %in% have_imf_peaks)) {
+        return(NULL)
+      } else {
+        return(tmp_df)
+      }
+    })
+    missing_imf = missing_imf[!purrr::map_lgl(missing_imf, is.null)]
+    out_gemf_emf = trimmed_gemf_emf
+    if (length(missing_imf) > 0) {
+
+      has_imf = unique(purrr::map_df(trimmed_gemf_emf$info, ~ .x))
+
+      imf_by_emf = split(has_imf, has_imf$emf_Adduct)
+
+      imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
+        match_imf_by_mz(x[[1]], x[[2]], peak_mz)
       })
-    })
-    missing_imf = unlist(missing_imf, use.names = FALSE, recursive = FALSE)
+      imf_matches = imf_matches[!is.na(imf_matches$sample), ]
 
-    imf_by_emf = split(has_imf, has_imf$emf_Adduct)
-
-    imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
-      match_imf_by_mz(x[[1]], x[[2]], peak_mz)
-    })
-    imf_matches = imf_matches[!is.na(imf_matches$sample), ]
-
-    if (nrow(imf_matches) > 0) {
-      out_gemf_emf = rbind(trimmed_gemf_emf, imf_matches)
-    } else {
-      out_gemf_emf = trimmed_gemf_emf
+      if (nrow(imf_matches) > 0) {
+        out_gemf_emf = rbind(out_gemf_emf, imf_matches)
+      }
     }
+  } else {
+    out_gemf_emf = gemf_emf
+  }
+
+  if (length(setdiff(unique(gemf_emf$sample), unique(out_gemf_emf$sample))) > 0) {
+    message("sample doesn't have IMFs")
   }
 
   out_gemf_emf
@@ -348,10 +356,10 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
 }
 
 names(sudo_emf_list) = paste0("SEMF.", seq(1, length(sudo_emf_list)))
-# chosen_emfs = purrr::map2(sudo_emf_list[1:100], names(sudo_emf_list)[1:100], function(.x, .y){
-#   message(.y)
-#   choose_emf(all_gemfs[unique(.x$grouped_emf)])
-# })
+chosen_emfs = purrr::map2(sudo_emf_list[1:100], names(sudo_emf_list)[1:100], function(.x, .y){
+ message(.y)
+ choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz)
+})
 #
 # # debugging
 grouped_emfs = all_gemfs[unique(sudo_emf_list[[16]]$grouped_emf)]
