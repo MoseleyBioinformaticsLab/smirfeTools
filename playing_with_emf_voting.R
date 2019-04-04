@@ -12,6 +12,8 @@ assigned_data = readRDS("lung_matched_tissue_raw_smirfe_assignments_2018-09-07_i
 
 peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% "ObservedMZ"))
 
+# gettting sample level emfs -----
+
 get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98){
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
   e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data))
@@ -93,6 +95,8 @@ all_gemf_emf_mapping = furrr::future_map_dfr(within_sample_emfs, function(x){
     data.frame(grouped_emf = .y, emf_Adduct = .x$emf, stringsAsFactors = FALSE)
   })
 })
+
+# sudo emf list generation -----
 
 sudo_emf_list = vector("list", length(unique(all_gemf_emf_mapping$grouped_emf)))
 
@@ -200,6 +204,8 @@ by_sample = data.frame(grouped_emf = unique(single_sudo$grouped_emf), stringsAsF
   dplyr::mutate(gemf = stringr::str_split_fixed(grouped_emf, "\\.", 2)[,1],
                 sample = stringr::str_split_fixed(grouped_emf, "\\.", 2)[,2]) %>%
   dplyr::arrange(sample)
+
+# voting on the emfs -----
 
 #' match peaks to IMFs by M/Z
 #'
@@ -373,12 +379,52 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
 }
 
 names(sudo_emf_list) = paste0("SEMF.", seq(1, length(sudo_emf_list)))
-chosen_emfs = purrr::map2(sudo_emf_list[1:100], names(sudo_emf_list)[1:100], function(.x, .y){
- message(.y)
+chosen_emfs = purrr::map2(sudo_emf_list, names(sudo_emf_list), function(.x, .y){
+ #message(.y)
  choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz)
 })
-#
-# # debugging
-grouped_emfs = all_gemfs[unique(sudo_emf_list[[16]]$grouped_emf)]
 
-# chosen_emfs = furrr::future_map(sudo_emf_list, ~ choose_emf(all_gemfs[unique(.x$grouped_emf)]))
+# metrics of voted sudo emfs -----
+
+calculate_sudo_nemf = function(voted_emf_list){
+  unique_emfs = unique(voted_emf_list$emf)
+  emf_adduct = stringr::str_split_fixed(unique_emfs, "\\.", 2)
+  split_emfs = split(emf_adduct[,2], emf_adduct[,1])
+
+  n_adduct = purrr::map_dbl(split_emfs, function(multi_adducts){
+    ammonia_proton_mixup = c("14N1,1H4", "1H1")
+    if (all(ammonia_proton_mixup %in% multi_adducts)) {
+      multi_adducts = multi_adducts[!(multi_adducts %in% ammonia_proton_mixup)]
+      n_adduct = 1
+    }
+    if (length(multi_adducts) > 0) {
+      n_adduct = n_adduct + length(multi_adducts)
+    }
+    n_adduct
+  })
+
+  n_emf = sum(n_adduct)
+
+  n_sample = length(unique(voted_emf_list$sample))
+  n_match_mz = length(unique(voted_emf_list[is.na(voted_emf_list$e_value), "sample"]))
+
+  data.frame(n_emf = n_emf, n_sample = n_sample, n_matched_mz = n_match_mz)
+}
+
+voted_metrics = purrr::map_df(chosen_emfs, calculate_sudo_nemf)
+
+
+peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
+  all_peaks = unique(unlist(purrr::map(.x$peaks, ~ .x), use.names = FALSE))
+  data.frame(Sample_Peak = all_peaks, semf = .y, stringsAsFactors = FALSE)
+})
+
+# statistics ----
+
+##  Just using a cutoff of 0.98, and no corroborating information:
+##  1580 of 2258 have less than 5 samples associated
+##  495 EMFs have more than 10 samples (of 50)
+##  376 EMFs have a single EMF
+##  1347 EMFs have <= 5 voted EMFs
+##  4246 of 41K peaks are shared across EMFs (10%)
+
