@@ -230,35 +230,28 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
   mean_mz = dplyr::left_join(mean_mz, peak_nap, by = "complete_IMF") %>%
     dplyr::arrange(dplyr::desc(NAP)) %>% dplyr::mutate(seq = seq(1, dplyr::n()))
 
-  unknown_mz = dplyr::left_join(unknown_peaks, peak_mz, by = c("Peaks" = "Sample_Peak"))
+  just_peaks = as.character(unknown_peaks$Peaks)
   # this also needs to have the peaks sorted by their NAP, and match in order
   # of NAP. When the next one doesn't match, stop!
-  match_mz = purrr::map_df(mean_mz$complete_IMF, function(test_imf){
-    message(test_imf)
-    test_mz = dplyr::filter(mean_mz, complete_IMF %in% test_imf) %>%
-      dplyr::slice(rep(1:n()), each = 3)
-    test_mz = test_mz[rep(1, each = nrow(unknown_mz)), ]
-    tmp_mean = test_mz %>% dplyr::mutate(diff = abs(mean - unknown_mz$Value),
-                                         Sample_Peak = unknown_mz$Peaks,
-                                         PeakID = unknown_mz$PeakID,
-                                         Sample = unknown_mz$Sample.x) %>%
+  match_mz = purrr::map_df(just_peaks, function(test_peak){
+    test_mz = dplyr::filter(peak_mz, Sample_Peak %in% test_peak)
+    tmp_mean = mean_mz %>% dplyr::mutate(diff = abs(mean - test_mz$Value)) %>%
       dplyr::filter(diff <= sd2)
 
     if (nrow(tmp_mean) > 0) {
       tmp_mean = dplyr::slice(tmp_mean, which.min(diff))
       match_imf = data.frame(complete_IMF = tmp_mean$complete_IMF,
-                             PeakID = tmp_mean$PeakID,
-                             Sample = tmp_mean$Sample,
-                             Sample_Peak = tmp_mean$Sample_Peak,
+                             PeakID = test_mz$PeakID,
+                             Sample = test_mz$Sample,
+                             Sample_Peak = test_peak,
                              emf_Adduct = imf_2_peak$emf_Adduct[1],
-                             seq = tmp_mean$seq,
+                             seq = tmp_mean$seq[1],
                              stringsAsFactors = FALSE)
-
     } else {
       match_imf = data.frame(complete_IMF = as.character(NA),
-                             PeakID = as.integer(NA),
+                             PeakID = NA,
                              Sample = as.character(NA),
-                             Sample_Peak = as.character(NA),
+                             Sample_peak = as.character(NA),
                              emf_Adduct = as.character(NA),
                              seq = as.integer(NA),
                              stringsAsFactors = FALSE)
@@ -267,13 +260,15 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
   })
 
   match_mz = match_mz[!is.na(match_mz$complete_IMF), ]
-  print(match_mz)
+
   null_evalue = data.frame(emf = imf_2_peak$emf_Adduct[1], e_value = NA, stringsAsFactors = FALSE)
   if (nrow(match_mz) > 0) {
+    match_mz = dplyr::arrange(match_mz, seq)
     seq_match = all(match_mz$seq == seq_len(nrow(match_mz)))
     unique_match = length(unique(match_mz$complete_IMF)) == nrow(match_mz)
 
     if (!(seq_match && unique_match)) {
+      #print(match_mz)
       match_mz = match_mz[1,]
       match_mz[1, ] = NA
     }
@@ -369,9 +364,9 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
     out_gemf_emf = gemf_emf
   }
 
-  if (length(setdiff(unique(gemf_emf$sample), unique(out_gemf_emf$sample))) > 0) {
-    message("sample doesn't have IMFs")
-  }
+  # if (length(setdiff(unique(gemf_emf$sample), unique(out_gemf_emf$sample))) > 0) {
+  #   message("sample doesn't have IMFs")
+  # }
 
   out_gemf_emf
 
