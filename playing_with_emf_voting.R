@@ -505,8 +505,92 @@ peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, 
 nrow(voted_metrics)
 dplyr::filter(voted_metrics, n_sample <= 5) %>% dplyr::summarize(n = n())
 dplyr::filter(voted_metrics, n_sample >= 10) %>% dplyr::summarize(n = n())
-dplyr::filter(voted_metrics, n_emf == 1) %>% dplyr::summarise(n = n())
+dplyr::filter(voted_metrics, n_emf == 2) %>% dplyr::summarise(n = n())
 dplyr::filter(voted_metrics, n_emf <= 5) %>% dplyr::summarise(n = n())
 sum(duplicated(peak_2_voted_emf$Sample_Peak)) / nrow(peak_2_voted_emf)
 sum(duplicated(peak_2_voted_emf$Sample_Peak))
 nrow(peak_2_voted_emf)
+
+# figure out what is going on with duplicates -----
+merge_duplicates = function(chosen_emfs){
+  peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
+    all_peaks = unique(unlist(purrr::map(.x$Sample_Peak, ~ .x), use.names = FALSE))
+    data.frame(Sample_Peak = all_peaks, semf = .y, stringsAsFactors = FALSE)
+  })
+
+  dup_peaks = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% (unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)]))) %>%
+    dplyr::arrange(Sample_Peak)
+
+  use_semfs = unique(dup_peaks$semf)
+
+  index_semfs = dup_semfs = purrr::map(use_semfs, ~ .x)
+  names(index_semfs) = names(dup_semfs) = use_semfs
+  index_semfs_peaks = purrr::map(chosen_emfs[use_semfs], ~ unique(unlist(.x$Sample_Peak, use.names = FALSE)))
+  index_semfs_gemfs = purrr::map(chosen_emfs[use_semfs], ~ unique(unlist(.x$grouped_emf, use.names = FALSE)))
+
+  dup_semfs_peaks = index_semfs_peaks
+  dup_semfs_gemfs = index_semfs_gemfs
+
+  for (isemf in use_semfs) {
+    use_i_semfs = index_semfs[[isemf]]
+    i_peaks = unique(unlist(index_semfs_peaks[use_i_semfs], use.names = FALSE))
+    n_i_peaks = length(i_peaks)
+    for (jsemf in use_semfs[!(use_semfs %in% isemf)]) {
+      use_j_semfs = index_semfs[[jsemf]]
+      j_peaks = unique(unlist(index_semfs_peaks[use_j_semfs], use.names = FALSE))
+      n_j_peaks = length(j_peaks)
+      intersect_ratio = length(intersect(i_peaks, j_peaks)) / c(n_i_peaks, n_j_peaks)
+
+      if (max(intersect_ratio) >= 0.5) {
+        all_semfs = unique(c(use_i_semfs, use_j_semfs))
+        index_semfs[[isemf]] = index_semfs[[jsemf]] = all_semfs
+        dup_semfs_peaks[all_semfs] = list(unique(unlist(index_semfs_peaks[all_semfs], use.names = FALSE)))
+        dup_semfs_gemfs[all_semfs] = list(unique(unlist(index_semfs_gemfs[all_semfs], use.names = FALSE)))
+      }
+    }
+  }
+  keep_semfs = !duplicated(index_semfs)
+  merged_gemfs = purrr::map(dup_semfs_gemfs[keep_semfs], ~ data.frame(grouped_emf = .x, stringsAsFactors = FALSE))
+  dup_semfs = use_semfs
+  return(list(merged = merged_gemfs, duplicated = dup_semfs))
+}
+
+determined_duplicates = merge_duplicates(chosen_emfs)
+
+chosen_nondup = chosen_emfs[!(names(chosen_emfs) %in% determined_duplicates$duplicated)]
+chosen_duplicates = purrr::map(determined_duplicates$merged, function(.x){
+  choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz)
+})
+
+all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
+
+# check if we still have any duplicate semfs-peak mappings after this
+dedup_semfs = unique(index_semfs)
+names(dedup_semfs) = paste0("SEMFD.", seq(1, length(dedup_semfs)))
+
+peaks_2_dedup = purrr::map2_df(dedup_semfs, names(dedup_semfs), function(.x, .y){
+  data.frame(Sample_Peak = unique(unlist(index_semfs_peaks[.x], use.names = FALSE)),
+             semf = .y,
+             stringsAsFactors = FALSE)
+})
+
+
+dup_peaks_by_semf = split(char_peaks, char_peaks$peaks)
+dup_peaks_by_semf = dup_peaks_by_semf[purrr::map_dbl(dup_peaks_by_semf, nrow) > 1]
+
+# interesting overlaps at the GEMF level
+# GEMF_121.Cpos
+# GEMF_118.100Cpos
+# GEMF_112.85Cpos
+# GEMF_107.85Cpos
+# GEMF_106.97Cpos
+# GEMF_102.97Cpos
+chosen_emfs[["SEMF.70"]]
+
+cpos100_gemfs = all_gemfs[grep("100Cpos", names(all_gemfs))]
+
+cpos100_peak_2_gemf = purrr::map2_dfr(cpos100_gemfs, names(cpos100_gemfs), function(.x, .y){
+  data.frame(Sample_Peak = .x$Sample_Peak, gemf = .y, stringsAsFactors = FALSE)
+})
+
+duplicate_cpos100 = dplyr::filter(cpos100_peak_2_gemf, Sample_Peak %in% (Sample_Peak[duplicated(Sample_Peak)]))
