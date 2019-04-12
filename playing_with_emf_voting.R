@@ -563,34 +563,14 @@ chosen_duplicates = purrr::map(determined_duplicates$merged, function(.x){
 })
 
 all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
+names(all_chosen_emfs) = paste0("SEMF.", seq(1, length(all_chosen_emfs)))
 
-# check if we still have any duplicate semfs-peak mappings after this
-dedup_semfs = unique(index_semfs)
-names(dedup_semfs) = paste0("SEMFD.", seq(1, length(dedup_semfs)))
-
-peaks_2_dedup = purrr::map2_df(dedup_semfs, names(dedup_semfs), function(.x, .y){
-  data.frame(Sample_Peak = unique(unlist(index_semfs_peaks[.x], use.names = FALSE)),
+peak_2_voted_emf = purrr::map2_df(all_chosen_emfs, names(all_chosen_emfs), function(.x, .y){
+  #message(.y)
+  data.frame(Sample_Peak = unique(unlist(.x$Sample_Peak, use.names = FALSE)),
              semf = .y,
              stringsAsFactors = FALSE)
 })
 
-
-dup_peaks_by_semf = split(char_peaks, char_peaks$peaks)
-dup_peaks_by_semf = dup_peaks_by_semf[purrr::map_dbl(dup_peaks_by_semf, nrow) > 1]
-
-# interesting overlaps at the GEMF level
-# GEMF_121.Cpos
-# GEMF_118.100Cpos
-# GEMF_112.85Cpos
-# GEMF_107.85Cpos
-# GEMF_106.97Cpos
-# GEMF_102.97Cpos
-chosen_emfs[["SEMF.70"]]
-
-cpos100_gemfs = all_gemfs[grep("100Cpos", names(all_gemfs))]
-
-cpos100_peak_2_gemf = purrr::map2_dfr(cpos100_gemfs, names(cpos100_gemfs), function(.x, .y){
-  data.frame(Sample_Peak = .x$Sample_Peak, gemf = .y, stringsAsFactors = FALSE)
-})
-
-duplicate_cpos100 = dplyr::filter(cpos100_peak_2_gemf, Sample_Peak %in% (Sample_Peak[duplicated(Sample_Peak)]))
+dup_peaks = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
+has_dup_semf = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% dup_peaks)
