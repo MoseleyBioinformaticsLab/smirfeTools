@@ -17,13 +17,14 @@ peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in%
 get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
   sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
-  e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data))
-  clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data))
+  e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
+  clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
+  evalue_clique_size = dplyr::left_join(e_values, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
 
-  peaks_by_emf = split(sample_assignments$PeakID, sample_assignments$emf_Adduct) %>%
+  peaks_by_emf = split(sample_assignments$PeakID, sample_assignments$complete_EMF) %>%
     purrr::map2_dfr(., names(.), function(.x, .y){
       peaks = unique(.x)
-      tmp_frame = data.frame(emf_Adduct = .y, PeakID_chr = paste(peaks, collapse = ","), stringsAsFactors = FALSE)
+      tmp_frame = data.frame(complete_EMF = .y, PeakID_chr = paste(peaks, collapse = ","), stringsAsFactors = FALSE)
       tmp_frame$PeakID = list(peaks)
       tmp_frame
     })
@@ -34,17 +35,19 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
     #message(ige)
     x = grouped_emf[[ige]]
     use_peaks = x$PeakID[1][[1]]
-    peak_info = purrr::map(x$emf_Adduct, ~ dplyr::filter(sample_assignments, PeakID %in% use_peaks, emf_Adduct %in% .x))
-    names(peak_info) = x$emf_Adduct
-    grouped_evalues = purrr::map_dbl(x$emf_Adduct, ~ dplyr::filter(e_values, PeakID %in% use_peaks, emf_Adduct %in% .x) %>% dplyr::slice(which.min(e_value)) %>% dplyr::pull(e_value))
-    grouped_clique_size = purrr::map_int(x$emf_Adduct, ~ dplyr::filter(clique_size, PeakID %in% use_peaks, emf_Adduct %in% .x) %>% dplyr::slice(1) %>% dplyr::pull(clique_size))
+    peak_info = purrr::map(x$complete_EMF, ~ dplyr::filter(sample_assignments, PeakID %in% use_peaks, complete_EMF %in% .x))
+    names(peak_info) = x$complete_EMF
+
+    # the true e-value is the one that corresponds to the actual clique size, or what should be the maximum of the clique size
+    grouped_evalues = purrr::map_dbl(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(e_value))
+    grouped_clique_size = purrr::map_int(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(clique_size))
 
     keep_emf = grouped_evalues <= evalue_cutoff
     x = x[keep_emf, ]
     if (sum(keep_emf) > 0) {
-      return(list(emf_Adduct = x$emf_Adduct,
+      return(list(complete_EMF = x$complete_EMF,
            peak_info = peak_info[keep_emf],
-           e_values = dplyr::mutate(x, e_value = grouped_evalues[keep_emf], Sample = sample_id, complete_EMF = stringr::str_split_fixed(emf_Adduct, "\\.", 2)[,1], type = "primary"),
+           e_values = dplyr::mutate(x, e_value = grouped_evalues[keep_emf], Sample = sample_id, complete_EMF = complete_EMF, type = "primary"),
            min_e_value = min(grouped_evalues[keep_emf]),
            clique_size = grouped_clique_size[1],
            PeakID = use_peaks,
@@ -61,17 +64,19 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   names(grouped_emf_peaks) = paste0("GEMF_", seq_along(grouped_emf_peaks), ".", sample_id)
 
   emf_by_emf = purrr::map_df(grouped_emf_peaks, function(x){
-    purrr::map_dfr(x$peak_info, ~ data.frame(emf_Adduct = .x$emf_Adduct[1],
+    purrr::map_dfr(x$peak_info, ~ data.frame(complete_EMF = .x$complete_EMF[1],
+                                             adduct_IMF = .x$adduct_IMF[1],
                                              isotopologue_EMF = unique(dplyr::filter(.x, Type %in% "isotopologue_EMF") %>% dplyr::pull(Assignment_Data)), stringsAsFactors = FALSE))
   }) %>% split(., .$isotopologue_EMF)
 
+  n_adduct = purrr::map_dbl(emf_by_emf, nrow)
+  emf_by_emf = emf_by_emf[n_adduct > 1]
   multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
     out_data = NULL
-    if (nrow(x) > 1) {
+    if (length(unique(x$adduct_IMF)) > 1) {
       #emf_adducts = stringr::str_split_fixed(x$emf_Adduct, "\\.", 2)
-      adducts = strsplit(x$emf_Adduct, ".", fixed = TRUE) %>% purrr::map_chr(~ .x[2])
 
-      if (sum(adducts %in% c("1H1", "14N1,1H4")) != length(adducts)) {
+      if (sum(x$adduct_IMF %in% c("1H1", "14N1,1H4")) != length(x$adduct_IMF)) {
         out_data = x
         out_data
       }
@@ -82,14 +87,14 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   if (use_corroborating) {
     all_evalues = purrr::map_df(grouped_emf_peaks, ~ .x$e_values)
 
-    gep_2_emf_adduct = purrr::map2_dfr(grouped_emf_peaks, names(grouped_emf_peaks),
+    gep_2_complete_emf = purrr::map2_dfr(grouped_emf_peaks, names(grouped_emf_peaks),
                                        function(.x, .y){
                                          #message(.y)
-                                         data.frame(gep = .y, emf_Adduct = .x$e_values$emf_Adduct,
+                                         data.frame(gep = .y, complete_EMF = .x$e_values$complete_EMF,
                                                     stringsAsFactors = FALSE)
                                        })
-    gep_2_emf_adduct = dplyr::filter(gep_2_emf_adduct, emf_Adduct %in% multi_evidence_emf$emf_Adduct)
-    unique_gep = unique(gep_2_emf_adduct$gep)
+    gep_2_complete_emf = dplyr::filter(gep_2_complete_emf, complete_EMF %in% multi_evidence_emf$complete_EMF)
+    unique_gep = unique(gep_2_complete_emf$gep)
     has_multi_evidence = which(names(grouped_emf_peaks) %in% unique_gep)
 
     grouped_emf_peaks = purrr::map_at(grouped_emf_peaks, has_multi_evidence, function(gep){
@@ -98,14 +103,14 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
       multi_evalues = purrr::map_df(seq_len(nrow(curr_evalues)), function(curr_row){
         base_data = curr_evalues[curr_row, ]
 
-        use_iso_emf = dplyr::filter(multi_evidence_emf, emf_Adduct %in% base_data$emf_Adduct) %>%
+        use_iso_emf = dplyr::filter(multi_evidence_emf, complete_EMF %in% base_data$complete_EMF) %>%
           dplyr::pull(isotopologue_EMF)
-        emf_matches = dplyr::filter(multi_evidence_emf, !(emf_Adduct %in% base_data$emf_Adduct), isotopologue_EMF %in% use_iso_emf) %>%
-          dplyr::pull(emf_Adduct)
+        emf_matches = dplyr::filter(multi_evidence_emf, !(complete_EMF %in% base_data$complete_EMF), isotopologue_EMF %in% use_iso_emf) %>%
+          dplyr::pull(complete_EMF)
 
         if (length(emf_matches) > 0) {
-          other_data = dplyr::filter(all_evalues, emf_Adduct %in% emf_matches) %>%
-            dplyr::mutate(emf_Adduct = base_data$emf_Adduct, type = "corroborating")
+          other_data = dplyr::filter(all_evalues, complete_EMF %in% emf_matches) %>%
+            dplyr::mutate(complete_EMF = base_data$complete_EMF, type = "corroborating")
           base_data = rbind(base_data, other_data)
         }
         base_data
@@ -129,7 +134,7 @@ within_sample_emfs = furrr::future_map(assigned_data, function(.x){
 
 all_gemf_emf_mapping = furrr::future_map_dfr(within_sample_emfs, function(x){
   purrr::map2_dfr(x$grouped_emf, names(x$grouped_emf), function(.x, .y){
-    data.frame(grouped_emf = .y, emf_Adduct = .x$emf_Adduct, stringsAsFactors = FALSE)
+    data.frame(grouped_emf = .y, complete_EMF = .x$complete_EMF, stringsAsFactors = FALSE)
   })
 })
 
@@ -140,20 +145,20 @@ create_sudo_emfs = function(gemf_2_emf){
   i_sudo = 1
   while (nrow(gemf_2_emf) > 0) {
     #message(i_sudo)
-    tmp_emf_mapping = dplyr::filter(gemf_2_emf, emf_Adduct %in% gemf_2_emf$emf_Adduct[1])
+    tmp_emf_mapping = dplyr::filter(gemf_2_emf, complete_EMF %in% gemf_2_emf$complete_EMF[1])
 
     emf_iter = dplyr::left_join(tmp_emf_mapping, gemf_2_emf, by = "grouped_emf") %>%
-      dplyr::transmute(grouped_emf = grouped_emf, emf_Adduct = emf_Adduct.y) %>% unique()
+      dplyr::transmute(grouped_emf = grouped_emf, complete_EMF = complete_EMF.y) %>% unique()
 
-    adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "emf_Adduct") %>%
-      dplyr::transmute(grouped_emf = grouped_emf.y, emf_Adduct = emf_Adduct) %>% unique()
+    adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "complete_EMF") %>%
+      dplyr::transmute(grouped_emf = grouped_emf.y, complete_EMF = complete_EMF) %>% unique()
 
     while (nrow(adduct_iter) != nrow(emf_iter)) {
       emf_iter = dplyr::left_join(adduct_iter, gemf_2_emf, by = "grouped_emf") %>%
-        dplyr::transmute(grouped_emf = grouped_emf, emf_Adduct = emf_Adduct.y) %>% unique()
+        dplyr::transmute(grouped_emf = grouped_emf, complete_EMF = complete_EMF.y) %>% unique()
 
-      adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "emf_Adduct") %>%
-        dplyr::transmute(grouped_emf = grouped_emf.y, emf_Adduct = emf_Adduct) %>% unique()
+      adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "complete_EMF") %>%
+        dplyr::transmute(grouped_emf = grouped_emf.y, complete_EMF = complete_EMF) %>% unique()
     }
 
     sudo_emf_list[[i_sudo]] = adduct_iter
@@ -292,7 +297,7 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
                              PeakID = test_mz$PeakID,
                              Sample = test_mz$Sample,
                              Sample_Peak = test_peak,
-                             emf_Adduct = imf_2_peak$emf_Adduct[1],
+                             complete_EMF = imf_2_peak$complete_EMF[1],
                              seq = tmp_mean$seq[1],
                              stringsAsFactors = FALSE)
     } else {
@@ -300,7 +305,7 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
                              PeakID = NA,
                              Sample = as.character(NA),
                              Sample_peak = as.character(NA),
-                             emf_Adduct = as.character(NA),
+                             complete_EMF = as.character(NA),
                              seq = as.integer(NA),
                              stringsAsFactors = FALSE)
     }
@@ -309,7 +314,7 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
 
   match_mz = match_mz[!is.na(match_mz$complete_IMF), ]
 
-  null_evalue = data.frame(emf_Adduct = imf_2_peak$emf_Adduct[1], e_value = NA, stringsAsFactors = FALSE)
+  null_evalue = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], e_value = NA, stringsAsFactors = FALSE)
   if (nrow(match_mz) > 0) {
     match_mz = dplyr::arrange(match_mz, seq)
     seq_match = all(match_mz$seq == seq_len(nrow(match_mz)))
@@ -345,22 +350,22 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
   # with loose ratio cutoff (say 0.5), then filter for corresponding in each sample, and do the vote
   # again, with something added to boost the corresponding.
 
-  emf_votes = dplyr::group_by(grouped_evalues, emf_Adduct) %>% dplyr::summarise(sum_information = sum(information)) %>%
+  emf_votes = dplyr::group_by(grouped_evalues, complete_EMF) %>% dplyr::summarise(sum_information = sum(information)) %>%
     dplyr::mutate(max_ratio = sum_information / max(sum_information))
   keep_emf = dplyr::filter(emf_votes, max_ratio >= keep_ratio)
 
-  null_evalue = data.frame(emf_Adduct = NA, e_value = NA, stringsAsFactors = FALSE)
+  null_evalue = data.frame(complete_EMF = NA, e_value = NA, stringsAsFactors = FALSE)
   gemf_emf = purrr::map2_dfr(grouped_emfs, names(grouped_emfs), function(.x, .y){
     sample_from_grouped_emf = stringr::str_split_fixed(.y, "\\.", 2)[2]
-    e_values = dplyr::filter(.x$e_values, emf_Adduct %in% keep_emf$emf_Adduct, type %in% "primary") %>% dplyr::select(emf_Adduct, e_value)
+    e_values = dplyr::filter(.x$e_values, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary") %>% dplyr::select(complete_EMF, e_value)
 
     if (nrow(e_values) > 0) {
       e_values$info = vector(mode = "list", length = nrow(e_values))
       e_values$Sample_Peak = vector(mode = "list", length = nrow(e_values))
-      use_info = .x$peak_info[e_values$emf_Adduct]
+      use_info = .x$peak_info[e_values$complete_EMF]
       e_values$info = purrr::map(use_info, function(in_info){
         in_info %>% dplyr::filter(Type %in% "NAP") %>% dplyr::mutate(NAP = as.numeric(Assignment_Data)) %>%
-          dplyr::select(complete_IMF, PeakID, Sample, Sample_Peak, emf_Adduct, NAP) %>%
+          dplyr::select(complete_IMF, PeakID, Sample, Sample_Peak, complete_EMF, NAP) %>%
           unique()
       })
 
@@ -397,7 +402,7 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
 
       has_imf = unique(purrr::map_df(trimmed_gemf_emf$info, ~ .x))
 
-      imf_by_emf = split(has_imf, has_imf$emf_Adduct)
+      imf_by_emf = split(has_imf, has_imf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
         match_imf_by_mz(x[[1]], x[[2]], peak_mz)
@@ -429,9 +434,9 @@ chosen_emfs = purrr::map2(sudo_emf_list, names(sudo_emf_list), function(.x, .y){
 # metrics of voted sudo emfs -----
 
 calculate_sudo_nemf = function(voted_emf_list){
-  unique_emfs = unique(voted_emf_list$emf_Adduct)
-  emf_adduct = stringr::str_split_fixed(unique_emfs, "\\.", 2)
-  split_emfs = split(emf_adduct[,2], emf_adduct[,1])
+  unique_emfs = unique(voted_emf_list$complete_EMF)
+  complete_EMF = stringr::str_split_fixed(unique_emfs, "\\.", 2)
+  split_emfs = split(complete_EMF[,2], complete_EMF[,1])
 
   n_adduct = purrr::map_dbl(split_emfs, function(multi_adducts){
     ammonia_proton_mixup = c("14N1,1H4", "1H1")
