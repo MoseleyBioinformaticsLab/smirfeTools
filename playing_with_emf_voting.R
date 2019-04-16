@@ -565,12 +565,50 @@ chosen_duplicates = purrr::map(determined_duplicates$merged, function(.x){
 all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
 names(all_chosen_emfs) = paste0("SEMF.", seq(1, length(all_chosen_emfs)))
 
-peak_2_voted_emf = purrr::map2_df(all_chosen_emfs, names(all_chosen_emfs), function(.x, .y){
-  #message(.y)
-  data.frame(Sample_Peak = unique(unlist(.x$Sample_Peak, use.names = FALSE)),
-             semf = .y,
-             stringsAsFactors = FALSE)
-})
+remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_mz){
+  peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
+    #message(.y)
+    data.frame(Sample_Peak = unique(unlist(.x$Sample_Peak, use.names = FALSE)),
+               semf = .y,
+               stringsAsFactors = FALSE)
+  })
 
-dup_peaks = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
-has_dup_semf = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% dup_peaks)
+  dup_peaks = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
+  has_dup_semf = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% dup_peaks)
+
+  has_dup_emf = which(names(chosen_emfs) %in% unique(has_dup_semf$semf))
+
+  chosen_emfs = purrr::map_at(chosen_emfs, has_dup_emf, function(in_semf){
+    peak_2_gemf = purrr::map_df(seq(1, nrow(in_semf)), function(in_row){
+      data.frame(Sample_Peak = in_semf[in_row, "Sample_Peak"][[1]],
+                 grouped_emf = in_semf[in_row, "grouped_emf"],
+                 stringsAsFactors = FALSE)
+    })
+    bad_gemfs = dplyr::filter(peak_2_gemf, Sample_Peak %in% dup_peaks)
+    good_gemfs = dplyr::filter(peak_2_gemf, !(grouped_emf %in% bad_gemfs$grouped_emf))
+
+    if (nrow(good_gemfs) > 0) {
+      return(choose_emf(all_gemfs[unique(good_gemfs$grouped_emf)], peak_mz))
+    } else {
+      return(NULL)
+    }
+
+  })
+
+  chosen_null = purrr::map_lgl(chosen_emfs, is.null)
+  chosen_emfs = chosen_emfs[!chosen_null]
+  names(chosen_emfs) = paste0("SEMF.", seq(1, length(chosen_emfs)))
+  chosen_emfs
+}
+
+
+
+
+
+# the next step here, is for these peaks and SEMFs, go through
+# and remove the GEMFs that contain the multiply mapped peaks, and then do
+# the EMF voting procedure one last time.
+
+# next step: run full lung cancer dataset (note: do this on hemera)
+# compare peak IMFs from EMF voting with IMFs from previous work
+# run Daret St Clair's dataset
