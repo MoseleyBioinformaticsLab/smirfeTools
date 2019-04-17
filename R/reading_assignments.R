@@ -162,94 +162,69 @@ extract_assigned_data <- function(assigned_data,
   chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
 
-  all_assignments <- purrr::map_df(assigned_data, "assignments")
-  all_peak_data <- purrr::map_df(assigned_data, "data")
+  extracted_emfs = extract_emfs(chosen_emfs)
 
-  has_removeable <- grepl(remove_elements, all_assignments[[imf]])
+  peak_height = purrr::map_df(assigned_data, function(in_assign){
+    tmp_data = in_assign$data %>% dplyr::filter(Measurement %in% "Height") %>%
+      dplyr::mutate(Sample_Peak = paste0(Sample, "_", PeakID), Height = Value) %>%
+      dplyr::select(Sample_Peak, Height)
+  })
+  peak_height = rbind(peak_height, data.frame(Sample_Peak = "0", Height = NA, stringsAsFactors = FALSE))
 
-  all_assignments <- all_assignments[!has_removeable, ]
+  peak_height_matrix = matrix(peak_height$Height, nrow = nrow(peak_height), ncol = 1)
+  rownames(peak_height_matrix) = peak_height$Sample_Peak
 
-  split_assignments <- split(all_assignments, all_assignments[[sample_peak]])
+  peak_mz = rbind(peak_mz, data.frame(PeakID = "0", Measurement = "ObservedMZ",
+                                      Value = NA, Sample = "0", Sample_Peak = "0",
+                                      stringsAsFactors = FALSE))
+  peak_mz_matrix = matrix(peak_mz$Value, nrow = nrow(peak_mz), ncol = 1)
+  rownames(peak_mz_matrix) = peak_mz$Sample_Peak
 
-  all_assignments <- purrr::map_df(split_assignments, filter_peak_imfs, imf = imf, e_value = e_value)
+  all_samples = colnames(extracted_emfs[[1]][[1]]$peak_matrix)
+  numeric_matrix = matrix(NA, nrow = 1, ncol = length(all_samples))
+  colnames(numeric_matrix) = all_samples
+  extracted_emfs_height_mz = internal_map$map_function(extracted_emfs, function(in_emf){
+    purrr::map(in_emf, function(group_emf){
+      tmp_height = purrr::map(seq(1, nrow(group_emf$peak_matrix)), function(in_row){
+        tmp_data = numeric_matrix
+        tmp_peaks = group_emf$peak_matrix[in_row, ]
+        tmp_peaks[is.na(tmp_peaks)] = "0"
+        tmp_data[1, ] = peak_height_matrix[tmp_peaks, 1]
 
-  if (progress) message("Creating pseudo peaks ...")
+      })
+      out_height = do.call(rbind, tmp_height)
+      colnames(out_height) = all_samples
+      group_emf$height = out_height
 
-  sudo_start <- Sys.time()
-  sudo_peaks <- create_sudo_peaks(all_assignments, sample_peak = sample_peak, imf = imf)
-  sudo_end <- Sys.time()
+      tmp_mz = purrr::map(seq(1, nrow(group_emf$peak_matrix)), function(in_row){
+        tmp_data = numeric_matrix
+        tmp_peaks = group_emf$peak_matrix[in_row, ]
+        tmp_peaks[is.na(tmp_peaks)] = "0"
+        tmp_data[1, ] = peak_mz_matrix[tmp_peaks, 1]
 
-  if (progress) message(paste0("  Completed after ", format(difftime(sudo_end, sudo_start))))
+      })
+      out_mz = do.call(rbind, tmp_mz)
+      colnames(out_mz) = all_samples
+      group_emf$mz = out_mz
 
-  all_samples <- unique(all_assignments[, sample])
-  peak_matrix <- matrix(NA, nrow = length(sudo_peaks), ncol = length(all_samples))
-  colnames(peak_matrix) <- all_samples
-  rownames(peak_matrix) <- paste0("X", seq(1, length(sudo_peaks)))
+      group_emf
+    })
+  })
 
-  height_matrix <- peak_matrix
-  mz_matrix <- peak_matrix
-  imf_matrix <- matrix(vector("list", 1), nrow = length(sudo_peaks), ncol = length(all_samples))
-  colnames(imf_matrix) <- all_samples
-  rownames(imf_matrix) <- rownames(peak_matrix)
-  emf_matrix <- imf_matrix
+  all_assignments <- purrr::map_df(assigned_data, "assignments") %>%
+    dplyr::filter(Type %in% c("isotopologue_EMF", "isotopologue_IMF")) %>%
+    tidyr::spread(Type, Assignment_Data) %>%
+    dplyr::select(adduct_IMF, complete_EMF, complete_IMF, isotopologue_EMF, isotopologue_IMF) %>%
+    unique()
 
-  peak_2_imf <- vector("list", length(sudo_peaks))
-  names(peak_2_imf) <- rownames(peak_matrix)
-  peak_2_peak <- peak_2_imf
+  all_emfs = purrr::map_df(extracted_emfs_height_mz, function(in_emf){
+    purrr::map_df(in_emf, ~ .x$peak_info)
+  })
 
-  if (progress) message("Extracting data ...")
+  all_assignments = dplyr::filter(all_assignments, complete_EMF %in% unique(all_emfs$complete_EMF))
 
-  if (progress && require(knitrProgressBar)) {
-    pb <- knitrProgressBar::progress_estimated(length(sudo_peaks))
-    do_update <- TRUE
-  } else {
-    do_update <- FALSE
-  }
-
-  for (ipeak in seq_along(sudo_peaks)) {
-    if (do_update) {
-      knitrProgressBar::update_progress(pb)
-    }
-
-
-    tmp_assignment <- all_assignments[all_assignments[, imf] %in% sudo_peaks[[ipeak]][[imf]], ]
-    use_imfs <- choose_imfs(tmp_assignment, sample_peak = sample_peak,
-                            imf = imf, sample = sample, e_value = e_value,
-                            data_col = data_col)
-    use_imfs <- unique(use_imfs)
-    peak_2_imf[[ipeak]] <- use_imfs
-
-    imf_mz_diff <- unique(tmp_assignment[(tmp_assignment[, imf] %in% use_imfs) & (tmp_assignment$Type %in% mz_diff), ])
-    imf_mz_diff[[data_col]] <- as.numeric(imf_mz_diff[[data_col]])
-    use_peaks <- choose_single_peak(imf_mz_diff,
-                                    sample_peak = sample_peak, sample = sample,
-                                    data_col = data_col)
-    names(use_peaks) <- NULL
-
-    peak_2_peak[[ipeak]] <- use_peaks
-
-    peak_mz <- extract_single(all_peak_data, peaks = use_peaks, use_var = observed_mz, key = "Measurement", value = "Value", sample_peak = sample_peak, sample = sample)
-    mz_matrix[ipeak, names(peak_mz)] <- peak_mz
-
-    peak_height <- extract_single(all_peak_data, peaks = use_peaks, use_var = height, key = "Measurement", value = "Value", sample_peak = sample_peak, sample = sample)
-    height_matrix[ipeak, names(peak_height)] <- peak_height
-
-    peak_imf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]]%in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks), c(imf, sample)], use_var = imf, sample = sample)
-    imf_matrix[ipeak, names(peak_imf)] <- peak_imf
-    peak_emf <- extract_multiple(tmp_assignment[(tmp_assignment[[imf]] %in% use_imfs) & (tmp_assignment[[sample_peak]] %in% use_peaks), c(emf, sample)], use_var = emf, sample = sample)
-    emf_matrix[ipeak, names(peak_emf)] <- peak_emf
-  }
-
-  n_imf <- purrr::map_int(peak_2_imf, length)
-  all_imf <- data.frame(peak = rep(names(peak_2_imf), n_imf), imf = unlist(peak_2_imf),
-                        stringsAsFactors = FALSE)
-  names(all_imf)[2] <- imf
-  emf_data <- unique(all_assignments[(all_assignments[[imf]] %in% unique(all_imf[[imf]])) , c(imf, emf)])
-  all_imf <- dplyr::left_join(all_imf, emf_data, by = imf)
-
-  return(list(mz = mz_matrix, height = height_matrix,
-              imf = imf_matrix, emf = emf_matrix,
-              peak_info = all_imf,
+  return(list(emfs = extracted_emfs_height_mz,
+              emf_info = all_assignments,
               tic = get_tic(assigned_data)))
 }
 
