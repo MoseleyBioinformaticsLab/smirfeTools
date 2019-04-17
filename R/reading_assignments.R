@@ -238,7 +238,8 @@ extract_assigned_data <- function(assigned_data,
 
   if (progress) {
     stop_time = Sys.time()
-    message(paste0("Done in ", difftime(stop_time, start_time)))
+    diff_time = difftime(stop_time, start_time)
+    message(paste0("Done in ", diff_time, " ", attr(diff_time, "units")))
   }
   return(list(emfs = extracted_emfs_height_mz,
               emf_info = all_assignments,
