@@ -137,6 +137,10 @@ extract_assigned_data <- function(assigned_data,
                                   chosen_keep_ratio = 0.9,
                                   progress = TRUE){
 
+  start_time = Sys.time()
+  if (progress) {
+    message("Generating EMF cliques from each sample ...")
+  }
   within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
     get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
@@ -150,10 +154,16 @@ extract_assigned_data <- function(assigned_data,
 
   all_gemf_emf_mapping = do.call(rbind, all_gemf_emf_mapping)
 
+  if (progress) {
+    message("Creating pseudo EMFs across cliques ...")
+  }
   sudo_emf_list = create_sudo_emfs(all_gemf_emf_mapping)
   # next things:
   all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FALSE)
 
+  if (progress) {
+    message("Choosing EMFs by voting ...")
+  }
   peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, chosen_keep_ratio)
@@ -162,6 +172,9 @@ extract_assigned_data <- function(assigned_data,
   chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
 
+  if (progress) {
+    message("Extracting EMF matrices ...")
+  }
   extracted_emfs = extract_emfs(chosen_emfs)
 
   peak_height = purrr::map_df(assigned_data, function(in_assign){
@@ -223,6 +236,10 @@ extract_assigned_data <- function(assigned_data,
 
   all_assignments = dplyr::filter(all_assignments, complete_EMF %in% unique(all_emfs$complete_EMF))
 
+  if (progress) {
+    stop_time = Sys.time()
+    message(paste0("Done in ", difftime(stop_time, start_time)))
+  }
   return(list(emfs = extracted_emfs_height_mz,
               emf_info = all_assignments,
               tic = get_tic(assigned_data)))
