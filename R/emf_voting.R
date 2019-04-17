@@ -464,3 +464,44 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, peak_mz, keep_ratio = 0
   remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, peak_mz, keep_ratio)
 
 }
+
+extract_emfs = function(chosen_emfs){
+  all_samples = unique(unlist(purrr::map(chosen_emfs, ~ .x$Sample)))
+
+  null_sample_matrix = matrix(as.character(NA), nrow = 1, ncol = length(all_samples))
+  colnames(null_sample_matrix) = all_samples
+
+  all_emfs = internal_map$map_function(chosen_emfs, function(use_emf){
+    peak_info = purrr::map_df(use_emf$info, ~ .x)
+
+    split_emf = split(peak_info, peak_info$complete_EMF)
+
+    purrr::map(split_emf, function(in_emf){
+      split_imf = split(in_emf, in_emf$complete_IMF)
+      emf_matrix = purrr::map(split_imf, function(x){
+        peak_matrix = null_sample_matrix
+        peak_matrix[1, x$Sample] = x$Sample_Peak
+        peak_matrix
+      })
+
+      emf_matrix = do.call(rbind, emf_matrix)
+
+      emf_nap = purrr::map_df(split_imf, ~ dplyr::select(.x, complete_IMF, complete_EMF, NAP) %>% dplyr::slice(1))
+
+      nap_order = order(emf_nap$NAP, decreasing = TRUE)
+
+      list(peak_matrix = emf_matrix[nap_order, ], peak_info = emf_nap[nap_order, ])
+    })
+
+  })
+
+  semf_emf = purrr::map2_df(all_emfs, names(all_emfs), function(.x, .y){
+    data.frame(semf = .y, emf = names(.x), stringsAsFactors = FALSE)
+  })
+
+  if (sum(duplicated(semf_emf$emf)) > 0) {
+    warning("Duplicate sudo EMF to complete EMF mappings detected!")
+  }
+
+  all_emfs
+}
