@@ -155,8 +155,7 @@ extract_assigned_data <- function(assigned_data,
   all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FALSE)
 
   peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
-  chosen_emfs = purrr::map2(sudo_emf_list, names(sudo_emf_list), function(.x, .y){
-    #message(.y)
+  chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, chosen_keep_ratio)
   })
 
