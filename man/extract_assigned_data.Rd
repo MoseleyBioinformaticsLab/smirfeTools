@@ -5,12 +5,12 @@
 \title{extract data}
 \usage{
 extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
-  imf = "complete_IMF", e_value = "e_value", emf = "complete_EMF",
-  sample = "Sample", mz_diff = "mass_error",
+  imf = "complete_IMF", e_value = "e_value", evalue_cutoff = 0.5,
+  emf = "complete_EMF", sample = "Sample", mz_diff = "mass_error",
   data_col = "Assignment_Data", numeric_values = c("e_value",
   "mass_error", "NAP", "lbl.count", "clique_size"),
   observed_mz = "ObservedMZ", height = "Height",
-  remove_elements = "S", progress = TRUE)
+  remove_elements = "S", chosen_keep_ratio = 0.9, progress = TRUE)
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}
@@ -21,6 +21,8 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 
 \item{e_value}{the e-values}
 
+\item{evalue_cutoff}{only consider e_values below this cutoff}
+
 \item{emf}{which variable holds the EMF information}
 
 \item{sample}{which variable holds the sample}
@@ -28,6 +30,8 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 \item{observed_mz}{which variable holds the observed M/Z}
 
 \item{height}{which variable holds the height / intensity}
+
+\item{chosen_keep_ratio}{what is the ratio of max to keep chosen EMFs?}
 
 \item{progress}{should the progress be shown?}
 
