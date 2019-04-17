@@ -105,12 +105,14 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
 #' @param e_value the e-values
+#' @param evalue_cutoff only consider e_values below this cutoff
 #' @param emf which variable holds the EMF information
 #' @param sample which variable holds the sample
 #' @param observed_mz which variable holds the observed M/Z
 #' @param assigned_mz which variable holds the assigned M/Z
 #' @param height which variable holds the height / intensity
 #' @param other_cols which other columns should be kept?
+#' @param chosen_keep_ratio what is the ratio of max to keep chosen EMFs?
 #' @param progress should the progress be shown?
 #'
 #' @export
@@ -123,6 +125,7 @@ extract_assigned_data <- function(assigned_data,
                                   sample_peak = "Sample_Peak",
                                   imf = "complete_IMF",
                                   e_value = "e_value",
+                                  evalue_cutoff = 0.5,
                                   emf = "complete_EMF",
                                   sample = "Sample",
                                   mz_diff = "mass_error",
@@ -131,7 +134,35 @@ extract_assigned_data <- function(assigned_data,
                                   observed_mz = "ObservedMZ",
                                   height = "Height",
                                   remove_elements = "S",
+                                  chosen_keep_ratio = 0.9,
                                   progress = TRUE){
+
+  within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
+    tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
+    get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
+  })
+
+  all_gemf_emf_mapping = internal_map$map_function(within_sample_emfs, function(x){
+    purrr::map2_dfr(x$grouped_emf, names(x$grouped_emf), function(.x, .y){
+      data.frame(grouped_emf = .y, complete_EMF = .x$complete_EMF, stringsAsFactors = FALSE)
+    })
+  })
+
+  all_gemf_emf_mapping = do.call(rbind, all_gemf_emf_mapping)
+
+  sudo_emf_list = create_sudo_emfs(all_gemf_emf_mapping)
+  # next things:
+  all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FALSE)
+
+  peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
+  chosen_emfs = purrr::map2(sudo_emf_list, names(sudo_emf_list), function(.x, .y){
+    #message(.y)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, chosen_keep_ratio)
+  })
+
+  chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, chosen_keep_ratio)
+  # next is to actually extract the right data. But up to here, everything appears OK.
+
   all_assignments <- purrr::map_df(assigned_data, "assignments")
   all_peak_data <- purrr::map_df(assigned_data, "data")
 
