@@ -17,8 +17,9 @@ get_stats = function(extracted_data){
     n_sample = max(purrr::map_int(g_emf, function(i_emf){
       sum(colSums(!is.na(i_emf$height)) > 0)
     }))
-    data.frame(n_emf = n_emf, n_sample = n_sample, n_used = ncol(i_emf$peak_matrix))
+    data.frame(n_emf = n_emf, n_sample = n_sample, n_used = ncol(g_emf[[1]]$peak_matrix))
   })
+  emf_counts
 }
 
 full_set = extract_assigned_data(assigned_data) %>% get_stats()
