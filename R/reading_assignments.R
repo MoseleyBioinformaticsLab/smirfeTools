@@ -198,9 +198,9 @@ extract_assigned_data <- function(assigned_data,
   colnames(numeric_matrix) = all_samples
   extracted_emfs_height_mz = internal_map$map_function(extracted_emfs, function(in_emf){
     purrr::map(in_emf, function(group_emf){
-      tmp_height = purrr::map(seq(1, nrow(group_emf$peak_matrix)), function(in_row){
+      tmp_height = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
         tmp_data = numeric_matrix
-        tmp_peaks = group_emf$peak_matrix[in_row, ]
+        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
         tmp_peaks[is.na(tmp_peaks)] = "0"
         tmp_data[1, ] = peak_height_matrix[tmp_peaks, 1]
 
@@ -209,9 +209,9 @@ extract_assigned_data <- function(assigned_data,
       colnames(out_height) = all_samples
       group_emf$height = out_height
 
-      tmp_mz = purrr::map(seq(1, nrow(group_emf$peak_matrix)), function(in_row){
+      tmp_mz = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
         tmp_data = numeric_matrix
-        tmp_peaks = group_emf$peak_matrix[in_row, ]
+        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
         tmp_peaks[is.na(tmp_peaks)] = "0"
         tmp_data[1, ] = peak_mz_matrix[tmp_peaks, 1]
 

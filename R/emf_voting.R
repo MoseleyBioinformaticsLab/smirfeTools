@@ -472,11 +472,13 @@ extract_emfs = function(chosen_emfs){
   colnames(null_sample_matrix) = all_samples
 
   all_emfs = internal_map$map_function(chosen_emfs, function(use_emf){
+    #message(i_emf)
+    #use_emf = chosen_emfs[[i_emf]]
     peak_info = purrr::map_df(use_emf$info, ~ .x)
 
     split_emf = split(peak_info, peak_info$complete_EMF)
 
-    purrr::map(split_emf, function(in_emf){
+    emf_data = purrr::map(split_emf, function(in_emf){
       split_imf = split(in_emf, in_emf$complete_IMF)
       emf_matrix = purrr::map(split_imf, function(x){
         peak_matrix = null_sample_matrix
@@ -492,6 +494,61 @@ extract_emfs = function(chosen_emfs){
 
       list(peak_matrix = emf_matrix[nap_order, ], peak_info = emf_nap[nap_order, ])
     })
+
+    peak_matrices = purrr::map(emf_data, ~ .x$peak_matrix)
+
+    # there is an odd property of some of these EMFs. In some samples, one EMF will get assignments, but
+    # the other EMF will not, leading to differences in the peak matrices. But if both EMFs have the same
+    # number of isotopologues, then they should have both been seen in the same samples. This code
+    # is an attempt to rectify that situation, by checking that either the same peaks were assigned the IMF
+    # in some samples, or that no peaks were observed. If there is a sample with discrepant peaks observed
+    # across the IMFs, then this will break and fall back to the original peak matrices
+    n_row = purrr::map_int(peak_matrices, ~ nrow(.x))
+    max_row = max(n_row)
+    corresponded_matrices = peak_matrices
+
+    for (irow in seq_len(max_row)) {
+      use_matrices = irow <= n_row
+      peak_compare = purrr::map_dfc(peak_matrices[use_matrices], ~ .x[irow, ]) %>% as.matrix()
+
+      match_or_na = purrr::map_chr(seq_len(nrow(peak_compare)), function(in_peak){
+        tmp_peak = peak_compare[in_peak, ]
+        tmp_peak = tmp_peak[!is.na(tmp_peak)]
+        unique_peak = length(unique(tmp_peak[!is.na(tmp_peak)])) == 1
+        if (length(tmp_peak) == 0) {
+          #warning("only NA!")
+          return(as.character(NA))
+        } else if (unique_peak) {
+          return(tmp_peak[1])
+        } else {
+          #message("there was a mismatch!")
+          return("FALSE")
+        }
+      })
+
+      corresponded_matrices[use_matrices] = purrr::map(corresponded_matrices[use_matrices], function(.x){
+        .x[irow, ] = match_or_na
+        .x
+      })
+
+    }
+
+    all_peaks = do.call(rbind, corresponded_matrices)
+
+    if ("FALSE" %in% all_peaks) {
+      #warning(paste0("there was a mismatch in ", i_emf))
+      use_matrices = peak_matrices
+    } else {
+      use_matrices = corresponded_matrices
+    }
+    emf_data = purrr::map(seq_len(length(emf_data)), function(idata){
+      emf_data[[idata]]$corresponded_matrix = use_matrices[[idata]]
+      emf_data[[idata]]
+    })
+
+    names(emf_data) = names(split_emf)
+
+    emf_data
 
   })
 
