@@ -562,3 +562,103 @@ extract_emfs = function(chosen_emfs){
 
   all_emfs
 }
+
+#' extract IMFs from EMFs
+#'
+#' There are use cases where we don't actually want to do statistical testing at the EMF level, but rather at the level
+#' of individual IMFs. In that case, we want to end up with a matrix of heights and M/Z for each IMF. See `Details` for
+#' how we handle multiple EMFs.
+#'
+#' @param emfs list of EMFs
+#' @param emf_info the info object for the list of EMFs
+#'
+#' @details For an EMF, the `peak_matrix` matrices are compared row by row, and for those that are identical, only one
+#'   copy of the height and M/Z matrices will be returned. In the cases where there is disagreement, multiple lines
+#'   will be returned.
+#'
+#' @return list
+#' @export
+#'
+extract_imfs = function(emfs){
+  all_compared = purrr::map(emfs, compare_emfs)
+}
+
+compare_emfs = function(emf){
+  peak_matrices = purrr::map(emf, ~ .x$peak_matrix)
+
+  # there is an odd property of some of these EMFs. In some samples, one EMF will get assignments, but
+  # the other EMF will not, leading to differences in the peak matrices. But if both EMFs have the same
+  # number of isotopologues, then they should have both been seen in the same samples. This code
+  # is an attempt to rectify that situation, by checking that either the same peaks were assigned the IMF
+  # in some samples, or that no peaks were observed. If there is a sample with discrepant peaks observed
+  # across the IMFs, then this will break and fall back to the original peak matrices
+  n_row = purrr::map_int(peak_matrices, ~ nrow(.x))
+  max_row = max(n_row)
+  peak_matrices2 = peak_matrices
+
+  for (irow in seq_len(max_row)) {
+    use_matrices = n_row <= irow
+    peak_compare = purrr::map_dfc(peak_matrices[use_matrices], ~ .x[irow, ]) %>% as.matrix()
+
+    match_or_na = purrr::map_chr(seq_len(nrow(peak_compare)), function(in_peak){
+      tmp_peak = peak_compare[in_peak, ]
+      tmp_peak = tmp_peak[!is.na(tmp_peak)]
+      unique_peak = length(unique(tmp_peak[!is.na(tmp_peak)])) == 1
+      if (length(tmp_peak) == 0) {
+        #warning("only NA!")
+        return(as.character(NA))
+      } else if (unique_peak) {
+        return(tmp_peak[1])
+      } else {
+        warning("there was a mismatch!")
+        return("FALSE")
+      }
+    })
+
+    peak_matrices2 = purrr::map(peak_matrices2[use_matrices], function(.x){
+      .x[irow, ] = match_or_na
+      .x
+    })
+
+  }
+
+  all_peaks = do.call(rbind, peak_matrices2)
+
+  if ("FALSE" %in% all_peaks) {
+    all_peaks = do.call(rbind, peak_matrices)
+  }
+
+  n_rows = purrr::map_int(peak_matrices, ~ nrow(.x))
+  max_rows = max(n_rows)
+
+  compare_heights = purrr::map(emf, ~ .x$height) %>% do.call(rbind, .)
+  compare_info = purrr::map_df(emf, ~ .x$peak_info)
+  compare_mz = purrr::map(emf, ~ .x$mz) %>% do.call(rbind, .)
+
+  group_imfs = vector("integer", length = nrow(compare_heights))
+
+  i_group = 1
+  while (sum(group_imfs == 0) > 0) {
+    zero_locs = which(group_imfs == 0)
+    master_loc = which(group_imfs == 0)[1]
+
+    for (iloc in zero_locs) {
+      if (isTRUE(all.equal(compare_heights[master_loc, ], compare_heights[iloc, ]))) {
+        group_imfs[iloc] = i_group
+      }
+    }
+    i_group = i_group + 1
+  }
+
+  df_groups = data.frame(groups = group_imfs, row_index = seq(1, length(group_imfs)))
+  split_groups = split(df_groups, df_groups$groups)
+
+  single_index = purrr::map_df(split_groups, ~ .x[1, ])
+
+  out_height = compare_heights[single_index$row_index, ]
+  out_mz = compare_mz[single_index$row_index, ]
+
+  out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
+
+  list(height = out_height, mz = out_mz, info = out_info)
+}
