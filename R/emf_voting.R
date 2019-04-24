@@ -563,20 +563,17 @@ extract_emfs = function(chosen_emfs){
   all_emfs
 }
 
-#' extract IMFs from EMFs
+#' extract IMF or EMF level data
 #'
-#' There are use cases where we don't actually want to do statistical testing at the EMF level, but rather at the level
-#' of individual IMFs. In that case, we want to end up with a matrix of heights and M/Z for each IMF. See `Details` for
-#' how we handle multiple EMFs.
+#' Extract either IMF or EMF level data from the extracted EMFs. Which is controlled by the `by` argument.
 #'
 #' @param emfs list of EMFs
-#' @param emf_info the info object for the list of EMFs
+#' @param by `EMF` (default) or `IMF`
 #'
-#' @details For an EMF, the `peak_matrix` matrices are compared row by row, and for those that are identical, only one
-#'   copy of the height and M/Z matrices will be returned. In the cases where there is disagreement, multiple lines
-#'   will be returned.
+#' @details For `EMF`, will be a list corresponding to each EMF from the sudo EMFs, for `IMF`, will be
+#'  matrices and a data.frame.
 #'
-#' @return list
+#' @return list with `height`, `mz`, and `info`
 #' @export
 #'
 extract_imfs = function(emfs, by = "EMF"){
