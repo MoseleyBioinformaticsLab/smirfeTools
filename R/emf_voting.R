@@ -576,7 +576,7 @@ extract_emfs = function(chosen_emfs){
 #' @return list with `height`, `mz`, and `info`
 #' @export
 #'
-extract_imfs = function(emfs, by = "EMF"){
+extract_imf_emf_data = function(emfs, by = "EMF"){
   all_compared = internal_map$map_function(emfs, compare_extract_emfs, by = by)
 
   if ("EMF" %in% by) {
