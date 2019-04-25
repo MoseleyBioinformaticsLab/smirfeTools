@@ -16,8 +16,13 @@ set_internal_map <- function(map_function = NULL){
 
 
 internal_map <- new.env(hash = TRUE)
+has_logger = new.env(hash = TRUE)
+assign("logger", FALSE, envir = has_logger)
 assign("map_function", purrr::map, envir = internal_map)
 
 .onLoad <- function(libname, pkgname) {
+  if (require("logger")) {
+    assign("logger", TRUE, envir = has_logger)
+  }
   debugme::debugme()
 }
