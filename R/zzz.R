@@ -1,4 +1,4 @@
-#' pick map_at enumerator
+#' pick map enumerator
 #'
 #' Allows the user to set which enumerator is being used internally in the functions.
 #'

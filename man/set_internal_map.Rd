@@ -2,7 +2,7 @@
 % Please edit documentation in R/zzz.R
 \name{set_internal_map}
 \alias{set_internal_map}
-\title{pick map_at enumerator}
+\title{pick map enumerator}
 \usage{
 set_internal_map(map_function = NULL)
 }

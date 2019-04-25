@@ -563,73 +563,105 @@ extract_emfs = function(chosen_emfs){
   all_emfs
 }
 
-#' extract IMFs from EMFs
+#' extract IMF or EMF level data
 #'
-#' There are use cases where we don't actually want to do statistical testing at the EMF level, but rather at the level
-#' of individual IMFs. In that case, we want to end up with a matrix of heights and M/Z for each IMF. See `Details` for
-#' how we handle multiple EMFs.
+#' Extract either IMF or EMF level data from the extracted EMFs. Which is controlled by the `by` argument.
 #'
 #' @param emfs list of EMFs
-#' @param emf_info the info object for the list of EMFs
+#' @param by `EMF` (default) or `IMF`
 #'
-#' @details For an EMF, the `peak_matrix` matrices are compared row by row, and for those that are identical, only one
-#'   copy of the height and M/Z matrices will be returned. In the cases where there is disagreement, multiple lines
-#'   will be returned.
+#' @details For `EMF`, will be a list corresponding to each EMF from the sudo EMFs, for `IMF`, will be
+#'  matrices and a data.frame.
 #'
-#' @return list
+#' @return list with `height`, `mz`, and `info`
 #' @export
 #'
-extract_imfs = function(emfs){
-  all_compared = purrr::map(emfs, compare_emfs)
+extract_imf_emf_data = function(emfs, by = "EMF"){
+  all_compared = internal_map$map_function(emfs, compare_extract_emfs, by = by)
+
+  if ("EMF" %in% by) {
+    all_height = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_height = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
+        out_height = in_emf$height
+        rownames(out_height) = peak_id
+        out_height
+      })
+      names(semf_height) = paste0(semf_id, "_", names(in_semf))
+      semf_height
+
+    }) %>% purrr::flatten()
+
+    all_mz = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_mz = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
+        out_mz = in_emf$mz
+        rownames(out_mz) = peak_id
+        out_mz
+      })
+      names(semf_mz) = paste0(semf_id, "_", names(in_semf))
+      semf_mz
+
+    }) %>% purrr::flatten()
+
+    all_info = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_info = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
+        info_df = purrr::map2_dfr(in_emf$info, peak_id, function(in_info, pid){
+          in_info$PeakID = pid
+          in_info$sudo_EMF = semf_id
+          in_info$sudo_group_EMF = paste0(emf_id)
+          in_info
+        })
+      })
+      names(semf_info) = paste0(semf_id, "_", names(in_semf))
+      semf_info
+    }) %>% purrr::flatten()
+
+  } else {
+    all_height = purrr::map2(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y,"_", names(.x$info))
+      out_height = .x$height
+      rownames(out_height) = peak_id
+      out_height
+    }) %>% do.call(rbind, .)
+    all_mz = purrr::map2(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y,"_", names(.x$info))
+      out_mz = .x$mz
+      rownames(out_mz) = peak_id
+      out_mz
+    }) %>% do.call(rbind, .)
+    all_info = purrr::map2_dfr(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y,"_", names(.x$info))
+      info = .x$info
+      n_info = purrr::map_int(info, nrow)
+      info_df = purrr::map2_dfr(info, peak_id, function(tmp_info, tmp_peak){
+        tmp_info$PeakID = tmp_peak
+        tmp_info$sudo_EMF = .y
+        tmp_info
+      })
+      info_df
+    })
+  }
+  return(list(height = all_height,
+              mz = all_mz,
+              info = all_info))
 }
 
-compare_emfs = function(emf){
-  peak_matrices = purrr::map(emf, ~ .x$peak_matrix)
+compare_extract_emfs = function(emf, by = "EMF"){
 
-  # there is an odd property of some of these EMFs. In some samples, one EMF will get assignments, but
-  # the other EMF will not, leading to differences in the peak matrices. But if both EMFs have the same
-  # number of isotopologues, then they should have both been seen in the same samples. This code
-  # is an attempt to rectify that situation, by checking that either the same peaks were assigned the IMF
-  # in some samples, or that no peaks were observed. If there is a sample with discrepant peaks observed
-  # across the IMFs, then this will break and fall back to the original peak matrices
-  n_row = purrr::map_int(peak_matrices, ~ nrow(.x))
-  max_row = max(n_row)
-  peak_matrices2 = peak_matrices
+  get_imfs = function(emf_group){
+    split_groups = split(emf_group, emf_group$group_imfs)
+    names(split_groups) = paste0("IMF.", seq_along(split_groups))
+    single_index = purrr::map_df(split_groups, ~ .x[1, ])
 
-  for (irow in seq_len(max_row)) {
-    use_matrices = n_row <= irow
-    peak_compare = purrr::map_dfc(peak_matrices[use_matrices], ~ .x[irow, ]) %>% as.matrix()
+    out_height = compare_heights[single_index$row_index, ]
+    out_mz = compare_mz[single_index$row_index, ]
 
-    match_or_na = purrr::map_chr(seq_len(nrow(peak_compare)), function(in_peak){
-      tmp_peak = peak_compare[in_peak, ]
-      tmp_peak = tmp_peak[!is.na(tmp_peak)]
-      unique_peak = length(unique(tmp_peak[!is.na(tmp_peak)])) == 1
-      if (length(tmp_peak) == 0) {
-        #warning("only NA!")
-        return(as.character(NA))
-      } else if (unique_peak) {
-        return(tmp_peak[1])
-      } else {
-        warning("there was a mismatch!")
-        return("FALSE")
-      }
-    })
+    out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
 
-    peak_matrices2 = purrr::map(peak_matrices2[use_matrices], function(.x){
-      .x[irow, ] = match_or_na
-      .x
-    })
-
+    list(height = out_height, mz = out_mz, info = out_info)
   }
-
-  all_peaks = do.call(rbind, peak_matrices2)
-
-  if ("FALSE" %in% all_peaks) {
-    all_peaks = do.call(rbind, peak_matrices)
-  }
-
-  n_rows = purrr::map_int(peak_matrices, ~ nrow(.x))
-  max_rows = max(n_rows)
 
   compare_heights = purrr::map(emf, ~ .x$height) %>% do.call(rbind, .)
   compare_info = purrr::map_df(emf, ~ .x$peak_info)
@@ -650,15 +682,54 @@ compare_emfs = function(emf){
     i_group = i_group + 1
   }
 
-  df_groups = data.frame(groups = group_imfs, row_index = seq(1, length(group_imfs)))
-  split_groups = split(df_groups, df_groups$groups)
+  df_groups = data.frame(group_imfs = group_imfs, row_index = seq(1, length(group_imfs)))
+  df_groups$complete_EMF = compare_info$complete_EMF[df_groups$row_index]
 
-  single_index = purrr::map_df(split_groups, ~ .x[1, ])
+  if ("EMF" %in% by) {
+    split_groups = split(df_groups, df_groups$complete_EMF)
+    group_emfs = vector("integer", length = length(split_groups))
 
-  out_height = compare_heights[single_index$row_index, ]
-  out_mz = compare_mz[single_index$row_index, ]
+    i_group = 1
+    while (sum(group_emfs == 0) > 0) {
+      zero_locs = which(group_emfs == 0)
+      master_loc = which(group_emfs == 0)[1]
 
-  out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
+      for (iloc in zero_locs) {
+        if (isTRUE(all.equal(split_groups[[master_loc]]$group_imfs, split_groups[[iloc]]$group_imfs))) {
+          group_emfs[iloc] = i_group
+        }
+      }
+      i_group = i_group + 1
+    }
 
-  list(height = out_height, mz = out_mz, info = out_info)
+    df_groups2 = purrr::map2_dfr(split_groups, group_emfs, function(.x, .y){
+      .x$group_emfs = .y
+      .x
+    })
+    split_emfs = split(df_groups2, df_groups2$group_emfs)
+    names(split_emfs) = paste0("EMF.", seq_along(split_emfs))
+
+    out_data = purrr::map(split_emfs, get_imfs)
+
+  } else {
+    out_data = get_imfs(df_groups)
+  }
+
+  out_data
+
+}
+
+#' extract EMF first rows
+#'
+#' If one wants to be able to filter EMF based data for those EMFs that show up in a particular number
+#' of samples, one needs to be able to count which samples the EMF appears in. This function extracts
+#' the first row of `height`s from each EMF into a single matrix.
+#'
+#' @param emf_heights list of EMF heights
+#'
+#' @export
+#' @return matrix
+#'
+extract_first_EMF_height = function(emf_heights){
+  purrr::map(emf_heights, ~ .x[1, ]) %>% do.call(rbind, .)
 }
