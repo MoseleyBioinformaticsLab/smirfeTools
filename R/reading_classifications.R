@@ -26,27 +26,50 @@ import_emf_classifications = function(classification_file, fix_json = TRUE, rm_n
   names(class_list) = class_data_names
   class_tmp_df = as.data.frame(class_list)
 
-  class_data <- purrr::map_df(emf_classes, function(in_list){
-    #message(in_list$SortedFormula)
-    length_data <- purrr::map_int(in_list, length)
-    max_length = max(length_data)
-    in_list = in_list[length_data > 0]
+  zero_frame = data.frame(Categories = NA, Classes = NA, isotopologue_EMF = "NA",
+                          stringsAsFactors = FALSE)
+  zero_frame = zero_frame[0, ]
 
-    in_list = purrr::map(in_list, function(x){
-      if (length(x) == 1) {
-        rep(x, max_length)
-      } else {
-        sort(c(x, rep(NA, max_length - length(x))), na.last = TRUE)
-      }
-    })
-    tmp_df = purrr::map_df(seq(1, max_length), ~ class_tmp_df)
-    tmp_df[, names(in_list)] <- in_list
-    #print(warnings())
-    tmp_df
+  has_category = purrr::map_lgl(emf_classes, ~ length(.x$Categories) > 0)
+  process_classes = emf_classes[has_category]
+  class_data <- purrr::map2_dfr(process_classes, names(process_classes), function(in_list, in_emf){
+    #message(in_emf)
+    n_category = length(in_list$Categories)
+    n_classes = length(in_list$Classes)
+
+    if (n_classes == 0) {
+      in_list$Classes = NA
+    }
+
+    if (((n_category > 0) && (n_category == n_classes)) || (n_classes == 0)) {
+      tmp_frame = as.data.frame(in_list, stringsAsFactors = FALSE)
+      tmp_frame$isotopologue_EMF = in_emf
+    } else if (n_category > 0) {
+      tmp_frame = as.data.frame(in_list, stringsAsFactors = FALSE)
+      tmp_frame$isotopologue_EMF = in_emf
+      #message(in_emf)
+    } else {
+      tmp_frame = zero_frame
+    }
+
+    tmp_frame
   })
-  if (rm_na_formula) {
-    class_data = dplyr::filter(class_data, !(is.na(Formula)))
-  }
 
-  class_data
+  isnt_not_or_na = !((class_data$Categories %in% "not_lipid") | (is.na(class_data$Classes)))
+
+  tmp_class = class_data[!isnt_not_or_na, ]
+
+  has_class = class_data[isnt_not_or_na, ]
+  extract_pattern = "\\[.*\\]"
+  check_class = stringr::str_extract(has_class$Categories, extract_pattern) %>% gsub("\\[|\\]", "", .)
+
+  has_class2 = purrr::map_df(seq(1, nrow(has_class)), function(in_row){
+    tmp_row = has_class[in_row, ]
+    if (!(grepl(check_class[in_row], tmp_row[1, "Classes"]))) {
+      tmp_row[1, "Classes"] = "NA"
+    }
+    tmp_row
+  })
+  out_classes = rbind(tmp_class, has_class2)
+  out_classes
 }
