@@ -741,17 +741,20 @@ compare_extract_emfs = function(emf, by = "EMF"){
 
 }
 
-#' extract EMF first rows
+#' extract EMF propensity
 #'
 #' If one wants to be able to filter EMF based data for those EMFs that show up in a particular number
 #' of samples, one needs to be able to count which samples the EMF appears in. This function extracts
-#' the first row of `height`s from each EMF into a single matrix.
+#' creates a matrix where ones note the samples that contained the EMF.
 #'
 #' @param emf_heights list of EMF heights
 #'
 #' @export
 #' @return matrix
 #'
-extract_first_EMF_height = function(emf_heights){
-  purrr::map(emf_heights, ~ .x[1, ]) %>% do.call(rbind, .)
+extract_emf_propensity = function(emf_heights){
+  presence_matrix = purrr::map(emf_heights, ~ as.integer(colSums(.x) > 0)) %>% do.call(rbind, .)
+  rownames(presence_matrix) = names(emf_heights)
+  colnames(presence_matrix) = colnames(emf_heights[[1]])
+  presence_matrix
 }
