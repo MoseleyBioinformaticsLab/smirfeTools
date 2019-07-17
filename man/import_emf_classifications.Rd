@@ -4,8 +4,7 @@
 \alias{import_emf_classifications}
 \title{Import EMF Classifications}
 \usage{
-import_emf_classifications(classification_file, fix_json = TRUE,
-  rm_na_formula = TRUE)
+import_emf_classifications(classification_file, fix_json = FALSE)
 }
 \arguments{
 \item{classification_file}{the file to read from}
