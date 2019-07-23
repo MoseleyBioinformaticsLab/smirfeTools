@@ -32,6 +32,7 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   peak_info <- internal_map$map_function(tmp_list$Peaks[to_extract], extract_peak_data)
 
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
+
   peak_assignments <- purrr::map_dfr(peak_info, "assignment")
 
   peak_data$Sample <- sample
@@ -40,9 +41,20 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   peak_assignments$Sample <- sample
   peak_assignments$Sample_Peak <- paste0(sample, "_", peak_assignments$PeakID)
 
+  peak_id = paste0(sample, "_", unlist(tmp_list$ScanLevel$PeakID))
+  scan_level_matrices = purrr::map(tmp_list$ScanLevel[c("CorrectedLog10Height", "Log10Height",
+                                                        "ObservedFrequency", "ObservedMZ")],
+                                   function(in_matrix){
+                                     tmp_list = purrr::map(in_matrix, ~ suppressWarnings(as.numeric(unlist(.x))))
+                                     tmp_matrix = do.call(rbind, tmp_list)
+                                     rownames(tmp_matrix) = peak_id
+                                     tmp_matrix[to_extract, ]
+                                   })
+
   list(tic = tmp_list$TIC,
        assignments = peak_assignments,
        data = peak_data,
+       scan_level = scan_level_matrices,
        sample = sample)
 }
 
