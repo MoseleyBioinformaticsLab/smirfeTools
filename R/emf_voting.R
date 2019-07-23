@@ -12,11 +12,16 @@
 #' @export
 get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
   sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
+  # add the adduct information into the EMF information
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
   e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   evalue_clique_size = dplyr::left_join(e_values, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
 
+
+  # split the peaks by which EMF they were assigned to, and then for each
+  # EMF spit out the set of peaks that were assigned that EMF, both in an
+  # easy to compare character form, and the actual list
   peaks_by_emf = split(sample_assignments$PeakID, sample_assignments$complete_EMF) %>%
     purrr::map2_dfr(., names(.), function(.x, .y){
       peaks = unique(.x)
@@ -25,8 +30,14 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
       tmp_frame
     })
 
+  # now we can easily find those EMFs that share the same set of peaks to create
+  # `grouped_EMFs`
   grouped_emf = split(peaks_by_emf, peaks_by_emf$PeakID_chr)
 
+  # for each grouped_EMF, get out the peak info, the e-value
+  # that corresponds to the number of peaks in the clique,
+  # filter to those EMF assignments that are below the filter,
+  # and then extract the relevant data
   grouped_emf_peaks = purrr::map(seq(grouped_emf), function(ige){
     #message(ige)
     x = grouped_emf[[ige]]
@@ -55,16 +66,23 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
 
   })
 
+  # our initial list might have null's because they don't have any EMF assignments
+  # with e-values below the cutoff
   gep_null = purrr::map_lgl(grouped_emf_peaks, is.null)
   grouped_emf_peaks = grouped_emf_peaks[!gep_null]
   names(grouped_emf_peaks) = paste0("GEMF_", seq_along(grouped_emf_peaks), ".", sample_id)
 
+  # now we can use the isotopologue_EMF to find those things that have multiple adducts
+  # to the same EMF, and then check if there is actually multiple evidences
   emf_by_emf = purrr::map_df(grouped_emf_peaks, function(x){
     purrr::map_dfr(x$peak_info, ~ data.frame(complete_EMF = .x$complete_EMF[1],
                                              adduct_IMF = .x$adduct_IMF[1],
                                              isotopologue_EMF = unique(dplyr::filter(.x, Type %in% "isotopologue_EMF") %>% dplyr::pull(Assignment_Data)), stringsAsFactors = FALSE))
   }) %>% split(., .$isotopologue_EMF)
 
+  # can only have multiple evidences if there are multiple rows from above,
+  # and H vs NH4 don't count as multiple evidence. This actually goes through
+  # to find those instances
   n_adduct = purrr::map_dbl(emf_by_emf, nrow)
   emf_by_emf = emf_by_emf[n_adduct > 1]
   multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
@@ -81,6 +99,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   })
 
   if (use_corroborating) {
+    # extract the e-values for each one
     all_evalues = purrr::map_df(grouped_emf_peaks, ~ .x$e_values)
 
     gep_2_complete_emf = purrr::map2_dfr(grouped_emf_peaks, names(grouped_emf_peaks),
@@ -93,6 +112,8 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
     unique_gep = unique(gep_2_complete_emf$gep)
     has_multi_evidence = which(names(grouped_emf_peaks) %in% unique_gep)
 
+    # add in the e-values, with the note that they are from "corroborating" evidence,
+    # so the actual assignments can be filtered out at the voting step.
     grouped_emf_peaks = purrr::map_at(grouped_emf_peaks, has_multi_evidence, function(gep){
       curr_evalues = gep$e_values
 
@@ -128,6 +149,10 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
 #' of shared EMFs within and across samples, based on shared EMFs.
 #'
 #' @param gemf_2_emf list of grouped EMFs to EMFs
+#'
+#' @details This is achieved by repeated set intersection / set union cycles, where
+#'  they are repeated until the set of things is consistent between cycles, and there
+#'  are no entries to pull from.
 #'
 #' @return list
 #' @export
@@ -267,11 +292,8 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
 choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
   grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
 
-  # I think the way to incorporate multi-adduct evidence is to add some small constant value to each
-  # of the samples where that EMF also had corresponding evidence. Either that, or do an initial vote
-  # with loose ratio cutoff (say 0.5), then filter for corresponding in each sample, and do the vote
-  # again, with something added to boost the corresponding.
-
+  # sum 1-evalue across the samples for each EMF, and keep those things that are
+  # within X% of the highest sum
   emf_votes = dplyr::group_by(grouped_evalues, complete_EMF) %>% dplyr::summarise(sum_information = sum(information)) %>%
     dplyr::mutate(max_ratio = sum_information / max(sum_information))
   keep_emf = dplyr::filter(emf_votes, max_ratio >= keep_ratio)
@@ -719,17 +741,20 @@ compare_extract_emfs = function(emf, by = "EMF"){
 
 }
 
-#' extract EMF first rows
+#' extract EMF propensity
 #'
 #' If one wants to be able to filter EMF based data for those EMFs that show up in a particular number
 #' of samples, one needs to be able to count which samples the EMF appears in. This function extracts
-#' the first row of `height`s from each EMF into a single matrix.
+#' creates a matrix where ones note the samples that contained the EMF.
 #'
 #' @param emf_heights list of EMF heights
 #'
 #' @export
 #' @return matrix
 #'
-extract_first_EMF_height = function(emf_heights){
-  purrr::map(emf_heights, ~ .x[1, ]) %>% do.call(rbind, .)
+extract_emf_propensity = function(emf_heights){
+  presence_matrix = purrr::map(emf_heights, ~ as.integer(colSums(.x) > 0)) %>% do.call(rbind, .)
+  rownames(presence_matrix) = names(emf_heights)
+  colnames(presence_matrix) = colnames(emf_heights[[1]])
+  presence_matrix
 }

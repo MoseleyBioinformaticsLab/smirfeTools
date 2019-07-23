@@ -376,3 +376,22 @@ get_emf_intensity_sums = function(split_emfs, feature_intensities, feature_mz, m
   )
   emf_data
 }
+
+#' Extract Single M/Z
+#'
+#' Given a list of EMF M/Z, we would like to get a single M/Z for each EMF,
+#' as by definition an EMF often has at least two IMFs.
+#'
+#' @param emf_list_mz the list of EMF M/Zs
+#'
+#' @export
+#'
+extract_emf_mz = function(emf_list_mz){
+  single_mz = function(matrix_mz, emf_id){
+    mean_samples = rowMeans(matrix_mz, na.rm = TRUE)
+    data.frame(emf = emf_id, mz = mean_samples[1], stringsAsFactors = FALSE)
+  }
+
+  emf_mz = purrr::imap_dfr(emf_list_mz, single_mz)
+  emf_mz
+}
