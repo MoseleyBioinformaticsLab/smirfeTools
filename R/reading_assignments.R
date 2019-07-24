@@ -54,7 +54,7 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   list(tic = tmp_list$TIC,
        assignments = peak_assignments,
        data = peak_data,
-       scan_level = scan_level_matrices,
+       scan_level = scan_level_lists,
        sample = sample)
 }
 
