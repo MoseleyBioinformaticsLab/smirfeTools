@@ -144,6 +144,7 @@ extract_assigned_data <- function(assigned_data,
                                   data_col = "Assignment_Data",
                                   numeric_values = c("e_value", "mass_error", "NAP", "lbl.count", "clique_size"),
                                   observed_mz = "ObservedMZ",
+                                  observed_frequency = "ObservedFrequency",
                                   height = "Height",
                                   remove_elements = "S",
                                   chosen_keep_ratio = 0.9,
@@ -176,10 +177,25 @@ extract_assigned_data <- function(assigned_data,
   if (progress) {
     message("Choosing EMFs by voting ...")
   }
+  peak_frequency = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_frequency))
+
+  scan_level_frequency = purrr::map(assigned_data, ~ .x$scan_level$ObservedFrequency)
+  scan_level_names = unlist(purrr::map(scan_level_frequency, ~ names(.x)))
+  scan_level_frequency = unlist(scan_level_frequency, recursive = FALSE, use.names = FALSE)
+  names(scan_level_frequency) = scan_level_names
+
+  scan_level_frequency_sd = purrr::map_dbl(scan_level_frequency, sd, na.rm = TRUE)
+  frequency_match_cutoff = 2 * mean(scan_level_frequency_sd)
   peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, chosen_keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   })
+
+  # debugging version
+  # chosen_emfs = internal_map$map_function(seq_along(sudo_emf_list), function(.x){
+  #   message(.x)
+  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_mz, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+  # })
 
   chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.

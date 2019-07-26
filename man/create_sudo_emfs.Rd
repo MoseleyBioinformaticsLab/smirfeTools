@@ -16,3 +16,8 @@ list
 Given the grouped EMFs in a sample to EMFs, come up with \code{sudo} EMFs, that is groups
 of shared EMFs within and across samples, based on shared EMFs.
 }
+\details{
+This is achieved by repeated set intersection / set union cycles, where
+they are repeated until the set of things is consistent between cycles, and there
+are no entries to pull from.
+}

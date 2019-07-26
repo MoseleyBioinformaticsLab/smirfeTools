@@ -9,8 +9,9 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
   emf = "complete_EMF", sample = "Sample", mz_diff = "mass_error",
   data_col = "Assignment_Data", numeric_values = c("e_value",
   "mass_error", "NAP", "lbl.count", "clique_size"),
-  observed_mz = "ObservedMZ", height = "Height",
-  remove_elements = "S", chosen_keep_ratio = 0.9, progress = TRUE)
+  observed_mz = "ObservedMZ", observed_frequency = "ObservedFrequency",
+  height = "Height", remove_elements = "S", chosen_keep_ratio = 0.9,
+  progress = TRUE)
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}

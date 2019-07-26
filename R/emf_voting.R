@@ -276,6 +276,92 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
   out_evalues
 }
 
+#' match peaks to IMFs by frequency
+#'
+#' Given a data.frame of IMFs to peaks for a given EMF, attempts to match unknown peaks
+#' to IMFs based on differences in frequency to the unknown peaks.
+#'
+#' @param imf_2_peak data.frame with IMF information (see details)
+#' @param unknown_peaks data.frame of peak information
+#' @param peak_frequency data.frame with `Sample_Peak` and `Value`, where `Value` is `ObservedFrequency`
+#' @param frequency_match_cutoff the maximum difference an unknown peak can have to any of the known peaks
+#'
+#' @return data.frame
+#' @export
+match_imf_by_frequency = function(imf_2_peak, unknown_peaks, peak_frequency, frequency_match_cutoff){
+  split_peaks_imf = split(imf_2_peak$Sample_Peak, imf_2_peak$complete_IMF)
+  split_peaks_frequency = purrr::map(split_peaks_imf, function(in_imf){
+    peak_frequency[peak_frequency$Sample_Peak %in% in_imf, "Value"]
+  })
+
+  peak_nap = unique(imf_2_peak[, c("complete_IMF", "NAP")]) %>%
+    dplyr::arrange(dplyr::desc(NAP)) %>% dplyr::mutate(seq = seq(1, dplyr::n()))
+  split_peaks_frequency = split_peaks_frequency[peak_nap$complete_IMF]
+
+  just_peaks = as.character(unknown_peaks$Peaks)
+  # this also needs to have the peaks sorted by their NAP, and match in order
+  # of NAP. When the next one doesn't match, stop!
+  match_frequency = purrr::map_df(just_peaks, function(test_peak){
+    test_frequency = dplyr::filter(peak_frequency, Sample_Peak %in% test_peak)
+    frequency_diff_perc = purrr::imap_dfr(split_peaks_frequency, function(.x, .y){
+      tmp_diff = abs(.x - test_frequency$Value)
+      tmp_diff = tmp_diff[!(tmp_diff == 0)]
+      data.frame(complete_IMF = .y,
+                 perc_match = sum(tmp_diff <= frequency_match_cutoff) / length(tmp_diff),
+                 median_match = median(tmp_diff),
+                 stringsAsFactors = FALSE)
+    })
+
+    frequency_diff_perc = dplyr::filter(frequency_diff_perc, perc_match > 0)
+    if (nrow(frequency_diff_perc) > 0) {
+      tmp_frequency = dplyr::slice(frequency_diff_perc, which.min(median_match))
+      match_imf = data.frame(complete_IMF = tmp_frequency$complete_IMF,
+                             PeakID = test_frequency$PeakID,
+                             Sample = test_frequency$Sample,
+                             Sample_Peak = test_peak,
+                             complete_EMF = imf_2_peak$complete_EMF[1],
+                             seq = peak_nap[peak_nap$complete_IMF %in% tmp_frequency$complete_IMF, "seq"],
+                             stringsAsFactors = FALSE)
+    } else {
+      match_imf = data.frame(complete_IMF = as.character(NA),
+                             PeakID = NA,
+                             Sample = as.character(NA),
+                             Sample_Peak = as.character(NA),
+                             complete_EMF = as.character(NA),
+                             seq = as.integer(NA),
+                             stringsAsFactors = FALSE)
+    }
+    match_imf
+  })
+
+  match_frequency = match_frequency[!is.na(match_frequency$complete_IMF), ]
+
+  null_evalue = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], e_value = NA, stringsAsFactors = FALSE)
+  if (nrow(match_frequency) > 0) {
+    match_frequency = dplyr::arrange(match_frequency, seq)
+    seq_match = all(match_frequency$seq == seq_len(nrow(match_frequency)))
+    unique_match = length(unique(match_frequency$complete_IMF)) == nrow(match_frequency)
+
+    if (!(seq_match && unique_match)) {
+      #print(match_frequency)
+      match_frequency = match_frequency[1,]
+      match_frequency[1, ] = NA
+    }
+  } else {
+    match_frequency = match_frequency[1,]
+    match_frequency[1, ] = NA
+  }
+
+  out_evalues = null_evalue
+  out_evalues$info = list(match_frequency)
+  out_evalues$Sample_Peak = list(match_frequency$Sample_Peak)
+  out_evalues$Sample = match_frequency$Sample[1]
+  out_evalues$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
+
+  out_evalues
+}
+
+
 #' choose most likely elemental molecular formula's
 #'
 #' Given a list of grouped EMFs (assumed to be from a single sudo EMF), votes on the most likely
@@ -289,7 +375,7 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
 #'
 #' @return data.frame
 #' @export
-choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
+choose_emf = function(grouped_emfs, peak_mz, peak_frequency, frequency_match_cutoff, keep_ratio = 0.9){
   grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
 
   # sum 1-evalue across the samples for each EMF, and keep those things that are
@@ -327,7 +413,11 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
   })
   na_evalues = purrr::map_lgl(gemf_emf$e_value, is.na)
 
-  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$Sample_Peaks[!na_evalues], ~ .x), use.names = FALSE))
+  # if (sum(na_evalues) > 0) {
+  #   message("Found one!")
+  # }
+
+  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$Sample_Peak[!na_evalues], ~ .x), use.names = FALSE))
 
   if (sum(na_evalues) > 0) {
     trimmed_gemf_emf = gemf_emf[!na_evalues, ]
@@ -349,9 +439,9 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
       imf_by_emf = split(has_imf, has_imf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
-        match_imf_by_mz(x[[1]], x[[2]], peak_mz)
+        match_imf_by_frequency(x[[1]], x[[2]], peak_frequency, frequency_match_cutoff)
       })
-      imf_matches = imf_matches[!is.na(imf_matches$sample), ]
+      imf_matches = imf_matches[!is.na(imf_matches$Sample), ]
 
       if (nrow(imf_matches) > 0) {
         out_gemf_emf = rbind(out_gemf_emf, imf_matches)
@@ -361,12 +451,50 @@ choose_emf = function(grouped_emfs, peak_mz, keep_ratio = 0.9){
     out_gemf_emf = gemf_emf
   }
 
-  # if (length(setdiff(unique(gemf_emf$sample), unique(out_gemf_emf$sample))) > 0) {
-  #   message("sample doesn't have IMFs")
-  # }
+  # ideally, right here we should go through and confirm that the the combination
+  # of EMF and Sample_Peak is unique, and remove any duplicate / subsumed entries.
+  # this seems like a hard problem to solve right now, so leaving it for later.
 
-  out_gemf_emf
+  # finally, go through each EMF and the associated peaks, and confirm that *all*
+  # of the peaks for each of the IMFs are within the frequency_match_cutoff, and
+  # remove any that aren't
+  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, peak_frequency, frequency_match_cutoff)
 
+  do.call(rbind, checked_emfs)
+
+}
+
+check_emf = function(in_emf, peak_frequency, frequency_match_cutoff){
+  emf_info = purrr::map_df(in_emf$info, ~ .x)
+
+  peaks_by_imf = split(emf_info$Sample_Peak, emf_info$complete_IMF)
+
+  keep_peaks_by_imf = purrr::map(peaks_by_imf, function(in_peaks){
+    in_frequencies = dplyr::filter(peak_frequency, Sample_Peak %in% in_peaks)
+
+    if (nrow(in_frequencies) == 1) {
+      return(in_peaks)
+    } else {
+      median_diffs = purrr::map_dbl(seq(1, nrow(in_frequencies)), function(in_row){
+        median(abs(in_frequencies[in_row, "Value"] - in_frequencies[-in_row, "Value"]))
+      })
+      out_peaks = in_frequencies[median_diffs <= frequency_match_cutoff, "Sample_Peak"]
+      return(out_peaks)
+    }
+  })
+
+  all_keep = unique(unlist(keep_peaks_by_imf))
+
+  in_emf$info = purrr::map(in_emf$info, function(in_info){
+    dplyr::filter(in_info, Sample_Peak %in% all_keep)
+  })
+  in_emf$Sample_Peak = purrr::map(in_emf$Sample_Peak, function(in_peaks){
+    base::intersect(in_peaks, all_keep)
+  })
+
+  nonzero_rows = purrr::map_lgl(in_emf$info, ~ nrow(.x) > 0)
+  in_emf = in_emf[nonzero_rows, ]
+  in_emf
 }
 
 #' remove duplicate peaks across sudo EMFs

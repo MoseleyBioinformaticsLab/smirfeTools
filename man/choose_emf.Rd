@@ -4,7 +4,8 @@
 \alias{choose_emf}
 \title{choose most likely elemental molecular formula's}
 \usage{
-choose_emf(grouped_emfs, peak_mz, keep_ratio = 0.9)
+choose_emf(grouped_emfs, peak_mz, peak_frequency, frequency_match_cutoff,
+  keep_ratio = 0.9)
 }
 \arguments{
 \item{grouped_emfs}{list of grouped EMFs}
