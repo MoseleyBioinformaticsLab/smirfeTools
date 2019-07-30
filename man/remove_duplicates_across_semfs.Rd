@@ -4,15 +4,17 @@
 \alias{remove_duplicates_across_semfs}
 \title{remove duplicate peaks across sudo EMFs}
 \usage{
-remove_duplicates_across_semfs(chosen_emfs, all_gemfs, peak_mz,
-  keep_ratio = 0.9)
+remove_duplicates_across_semfs(chosen_emfs, all_gemfs, peak_frequency,
+  frequency_match_cutoff, keep_ratio = 0.9)
 }
 \arguments{
 \item{chosen_emfs}{merged EMFs}
 
 \item{all_gemfs}{the grouped_EMFs}
 
-\item{peak_mz}{the data.frame of peak_mz}
+\item{peak_frequency}{the data.frame of peak_frequency}
+
+\item{frequency_match_cutoff}{tolerance for matched peaks for \code{choose_emf}}
 
 \item{keep_ratio}{for \code{choose_emf}}
 }

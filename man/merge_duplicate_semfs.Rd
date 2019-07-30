@@ -4,14 +4,17 @@
 \alias{merge_duplicate_semfs}
 \title{merge sudo EMFs with duplicate peaks}
 \usage{
-merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, keep_ratio = 0.9)
+merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency,
+  frequency_match_cutoff, keep_ratio = 0.9)
 }
 \arguments{
 \item{chosen_emfs}{sudo EMFs from \code{choose_emf}}
 
 \item{all_gemfs}{the grouped_EMFs}
 
-\item{peak_mz}{M/Z information for each and every peak}
+\item{peak_frequency}{frequency information for each and every peak}
+
+\item{frequency_match_cutoff}{how close do peaks need to be to each other}
 
 \item{keep_ratio}{the ratio used to keep other highly voted EMFs}
 }
