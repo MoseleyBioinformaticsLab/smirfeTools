@@ -190,16 +190,16 @@ extract_assigned_data <- function(assigned_data,
   frequency_match_cutoff = 2 * mean(scan_level_frequency_sd)
   peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_mz, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   })
 
   # debugging version
   # chosen_emfs = internal_map$map_function(seq_along(sudo_emf_list), function(.x){
   #   message(.x)
-  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_mz, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # })
 
-  chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_mz, chosen_keep_ratio)
+  chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
 
   if (progress) {
