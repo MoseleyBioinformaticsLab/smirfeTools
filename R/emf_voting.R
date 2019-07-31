@@ -524,8 +524,12 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_frequency
   has_dup_semf = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% dup_peaks)
 
   has_dup_emf = which(names(chosen_emfs) %in% unique(has_dup_semf$semf))
+  non_dup_emf = which(!(names(chosen_emfs) %in% unique(has_dup_semf$semf)))
 
-  chosen_emfs = purrr::map_at(chosen_emfs, has_dup_emf, function(in_semf){
+  non_dup_chosen = chosen_emfs[non_dup_emf]
+  potential_dup_chosen = chosen_emfs[has_dup_emf]
+
+  chosen_emfs_dedup = internal_map$map_function(potential_dup_chosen, function(in_semf){
     peak_2_gemf = purrr::map_df(seq(1, nrow(in_semf)), function(in_row){
       data.frame(Sample_Peak = in_semf[in_row, "Sample_Peak"][[1]],
                  grouped_emf = in_semf[in_row, "grouped_emf"],
@@ -542,10 +546,10 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_frequency
 
   })
 
-  chosen_null = purrr::map_lgl(chosen_emfs, is.null)
-  chosen_emfs = chosen_emfs[!chosen_null]
-  names(chosen_emfs) = paste0("SEMF.", seq(1, length(chosen_emfs)))
-  chosen_emfs
+  dedup_null = purrr::map_lgl(chosen_emfs_dedup, is.null)
+  out_emfs = c(non_dup_chosen, chosen_emfs_dedup[!dedup_null])
+  names(out_emfs) = paste0("SEMF.", seq(1, length(out_emfs)))
+  out_emfs
 }
 
 
@@ -607,7 +611,7 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, peak_frequency, frequen
   dup_semfs = use_semfs
 
   chosen_nondup = chosen_emfs[!(names(chosen_emfs) %in% use_semfs)]
-  chosen_duplicates = purrr::map(merged_gemfs, function(.x){
+  chosen_duplicates = internal_map$map_function(merged_gemfs, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_frequency, frequency_match_cutoff, keep_ratio)
   })
 

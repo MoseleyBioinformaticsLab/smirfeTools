@@ -199,13 +199,13 @@ extract_assigned_data <- function(assigned_data,
   #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # })
 
-  chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
 
   if (progress) {
     message("Extracting EMF matrices ...")
   }
-  extracted_emfs = extract_emfs(chosen_emfs)
+  extracted_emfs = extract_emfs(merged_chosen_emfs)
 
   peak_height = purrr::map_df(assigned_data, function(in_assign){
     tmp_data = in_assign$data %>% dplyr::filter(Measurement %in% "Height") %>%
