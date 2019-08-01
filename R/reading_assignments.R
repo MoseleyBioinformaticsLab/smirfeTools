@@ -193,6 +193,9 @@ extract_assigned_data <- function(assigned_data,
     choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   })
 
+  null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
+  chosen_emfs = chosen_emfs[!null_chosen]
+
   # debugging version
   # chosen_emfs = internal_map$map_function(seq_along(sudo_emf_list), function(.x){
   #   message(.x)
@@ -201,6 +204,9 @@ extract_assigned_data <- function(assigned_data,
 
   merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
+  #
+  null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
+  merged_chosen_emfs = merged_chosen_emfs[!null_chosen]
 
   if (progress) {
     message("Extracting EMF matrices ...")
