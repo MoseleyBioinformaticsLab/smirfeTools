@@ -150,12 +150,16 @@ extract_assigned_data <- function(assigned_data,
                                   height = "Height",
                                   remove_elements = "S",
                                   chosen_keep_ratio = 0.9,
+                                  difference_cutoff = NULL,
+                                  difference_measure = "ObservedFrequency",
                                   progress = TRUE){
 
   start_time = Sys.time()
   if (progress) {
     message("Generating EMF cliques from each sample ...")
   }
+
+
   within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
     get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
