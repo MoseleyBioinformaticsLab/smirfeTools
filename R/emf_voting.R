@@ -486,11 +486,34 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
 
   all_keep = unique(unlist(keep_peaks_by_imf))
 
+  info_by_sample = split(emf_info, emf_info$Sample) %>%
+    purrr::map_df(., function(in_sample){
+      in_sample = in_sample[order(in_sample$NAP, decreasing = TRUE), ]
+      in_sample$order = seq(1, nrow(in_sample))
+
+      in_sample = dplyr::filter(in_sample, Sample_Peak %in% all_keep)
+
+      if (nrow(in_sample) > 0) {
+        tmp_keep = rep(FALSE, nrow(in_sample))
+        for (i_peak in seq_len(nrow(in_sample))) {
+          if (in_sample[i_peak, "order"] == 1) {
+            tmp_keep[i_peak] = TRUE
+          } else {
+            if ((in_sample[i_peak, "order"] - 1) %in% in_sample[tmp_keep, "order"]) {
+              tmp_keep[i_peak] = TRUE
+            }
+          }
+        }
+        in_sample = in_sample[tmp_keep, ]
+      }
+      in_sample
+    })
+
   in_emf$info = purrr::map(in_emf$info, function(in_info){
-    dplyr::filter(in_info, Sample_Peak %in% all_keep)
+    dplyr::filter(in_info, Sample_Peak %in% info_by_sample$Sample_Peak)
   })
   in_emf$Sample_Peak = purrr::map(in_emf$Sample_Peak, function(in_peaks){
-    base::intersect(in_peaks, all_keep)
+    base::intersect(in_peaks, info_by_sample$Sample_Peak)
   })
 
   nonzero_rows = purrr::map_lgl(in_emf$info, ~ nrow(.x) > 0)
@@ -630,7 +653,7 @@ extract_emfs = function(chosen_emfs){
 
   #all_emfs = internal_map$map_function(chosen_emfs, function(use_emf){
   all_emfs = purrr::map(seq(1, length(chosen_emfs)), function(i_emf){
-    message(i_emf)
+    #message(i_emf)
     use_emf = chosen_emfs[[i_emf]]
     peak_info = purrr::map_df(use_emf$info, ~ .x)
 

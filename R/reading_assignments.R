@@ -163,7 +163,7 @@ extract_assigned_data <- function(assigned_data,
     message("Generating EMF cliques from each sample ...")
   }
 
-
+  names(assigned_data) = NULL
   within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
     get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
@@ -202,7 +202,7 @@ extract_assigned_data <- function(assigned_data,
   #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
   # })
 
-  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_location, difference_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
@@ -223,6 +223,7 @@ extract_assigned_data <- function(assigned_data,
   peak_height_matrix = matrix(peak_height$Height, nrow = nrow(peak_height), ncol = 1)
   rownames(peak_height_matrix) = peak_height$Sample_Peak
 
+  peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
   peak_mz = rbind(peak_mz, data.frame(PeakID = "0", Measurement = "ObservedMZ",
                                       Value = NA, Sample = "0", Sample_Peak = "0",
                                       stringsAsFactors = FALSE))
