@@ -154,6 +154,10 @@ extract_assigned_data <- function(assigned_data,
                                   difference_measure = "ObservedFrequency",
                                   progress = TRUE){
 
+  if (is.null(difference_cutoff)) {
+    stop("difference_cutoff is NULL, that is not allowed. Please provide a value!")
+  }
+
   start_time = Sys.time()
   if (progress) {
     message("Generating EMF cliques from each sample ...")
@@ -183,18 +187,10 @@ extract_assigned_data <- function(assigned_data,
   if (progress) {
     message("Choosing EMFs by voting ...")
   }
-  peak_frequency = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_frequency))
 
-  scan_level_frequency = purrr::map(assigned_data, ~ .x$scan_level$ObservedFrequency)
-  scan_level_names = unlist(purrr::map(scan_level_frequency, ~ names(.x)))
-  scan_level_frequency = unlist(scan_level_frequency, recursive = FALSE, use.names = FALSE)
-  names(scan_level_frequency) = scan_level_names
-
-  scan_level_frequency_sd = purrr::map_dbl(scan_level_frequency, sd, na.rm = TRUE)
-  frequency_match_cutoff = 2 * mean(scan_level_frequency_sd)
-  peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
+  peak_location = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% difference_measure))
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_location, difference_cutoff, chosen_keep_ratio)
   })
 
   null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
