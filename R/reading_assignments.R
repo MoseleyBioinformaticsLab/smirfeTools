@@ -205,8 +205,9 @@ extract_assigned_data <- function(assigned_data,
   merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_location, difference_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
   #
+  merged_chosen_emfs = merged_chosen_emfs[!null_1]
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
-  merged_chosen_emfs = merged_chosen_emfs[!null_chosen]
+  merged_chosen_emfs = merged_chosen_emfs[!null_chosen2]
 
   if (progress) {
     message("Extracting EMF matrices ...")
