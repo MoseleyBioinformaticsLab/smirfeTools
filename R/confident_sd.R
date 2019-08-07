@@ -122,3 +122,70 @@ calculate_confident_sd = function(emf_data, scan_level_frequency, sample_peak){
   })
   sd_data
 }
+
+
+#' create M/Z differences
+#'
+#' Given a list of coefficient data from multiple samples and a previously
+#' derived `frequency_offset`, this generates a data.frame of M/Z locations
+#' and differences.
+#'
+#' @param coefficient_info list of coefficients from `get_sample_coefficients`
+#' @param frequency_offset the offset to use, based on `find_confident_frequency_sd`
+#' @param mz_values a vector of M/Z values to create offsets for
+#'
+#' @export
+#' @return data.frame with Index and Value
+create_mz_diffs = function(coefficient_info, frequency_offset = NULL, mz_values = seq(150, 1600, 0.5)){
+  if (is.null(frequency_offset)) {
+    stop("frequency_offset is NULL, please supply a value!")
+  }
+
+  freq_coefficients = purrr::map(coefficient_info, function(in_sample){
+    in_sample$coefficients$frequency_coefficients
+  }) %>% do.call(rbind, .) %>% apply(., 2, median)
+
+  mz_coefficients = purrr::map(coefficient_info, function(in_sample){
+    in_sample$coefficients$mz_coefficients
+  }) %>% do.call(rbind, .) %>% apply(., 2, median)
+
+  freq_description = coefficient_info[[1]]$coefficients$frequency_fit_description
+  mz_description = coefficient_info[[1]]$coefficients$mz_fit_description
+
+  mz_2_freq = FTMS.peakCharacterization:::predict_exponentials(mz_values, mz_coefficients, mz_description)
+
+  frequency_diff = mz_2_freq + frequency_offset
+
+  mz_init = FTMS.peakCharacterization:::predict_exponentials(mz_2_freq, freq_coefficients, freq_description)
+  mz_shift = FTMS.peakCharacterization:::predict_exponentials(frequency_diff, freq_coefficients, freq_description)
+  mz_diff = abs(mz_shift - mz_init)
+
+  data.frame(Index = mz_values, Value = mz_diff)
+
+}
+
+#' get coefficient data
+#'
+#' Given a set of zip files, find the associated json metadata files, and extract the
+#' coefficient information from them.
+#'
+#' @param zip_file_list the list of zip files
+#'
+#' @export
+#' @return list of lists
+extract_coefficient_data = function(zip_file_list){
+  json_files = gsub(".zip$", ".json", zip_file_list)
+
+  exist_json = file.exists(json_files)
+
+  if (sum(!exist_json) > 0) {
+    warning_message = paste0(sum(!exist_json), " json files of ", length(json_files),
+                             " couldn't be found!")
+    warning(warning_message)
+  }
+
+  purrr::map(json_files[exist_json], function(use_file){
+    list(sample = gsub(".json$", "", basename(use_file)),
+         coefficients = jsonlite::fromJSON(json_file2)$peak$frequency_mz)
+  })
+}
