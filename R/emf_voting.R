@@ -673,7 +673,7 @@ extract_emfs = function(chosen_emfs){
 
       nap_order = order(emf_nap$NAP, decreasing = TRUE)
 
-      list(peak_matrix = emf_matrix[nap_order, ], peak_info = emf_nap[nap_order, ])
+      list(peak_matrix = emf_matrix[nap_order, , drop = FALSE], peak_info = emf_nap[nap_order, , drop = FALSE])
     })
 
     peak_matrices = purrr::map(emf_data, ~ .x$peak_matrix)
