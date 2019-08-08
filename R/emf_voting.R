@@ -379,6 +379,17 @@ match_imf_by_frequency = function(imf_2_peak, unknown_peaks, peak_location, diff
 choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio = 0.9){
   grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
 
+  if (is.data.frame(difference_cutoff)) {
+    use_location = dplyr::filter(peak_location, Sample_Peak %in% unique(unlist(grouped_emfs$Sample_Peak)))
+    max_location = max(use_location$Value)
+
+    difference_loc = which.min(abs(max_location - difference_cutoff$Index))
+    use_difference_cutoff = difference_cutoff[difference_loc, "Value"]
+  } else {
+    use_difference_cutoff = difference_cutoff
+  }
+
+
   # sum 1-evalue across the samples for each EMF, and keep those things that are
   # within X% of the highest sum
   emf_votes = dplyr::group_by(grouped_evalues, complete_EMF) %>% dplyr::summarise(sum_information = sum(information)) %>%
@@ -440,7 +451,7 @@ choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio
       imf_by_emf = split(has_imf, has_imf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
-        match_imf_by_frequency(x[[1]], x[[2]], peak_location, difference_cutoff)
+        match_imf_by_frequency(x[[1]], x[[2]], peak_location, use_difference_cutoff)
       })
       imf_matches = imf_matches[!is.na(imf_matches$Sample), ]
 
@@ -459,7 +470,7 @@ choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio
   # finally, go through each EMF and the associated peaks, and confirm that *all*
   # of the peaks for each of the IMFs are within the difference_cutoff, and
   # remove any that aren't
-  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, peak_location, difference_cutoff)
+  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, peak_location, use_difference_cutoff)
 
   do.call(rbind, checked_emfs)
 
@@ -597,6 +608,7 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, peak_location, differen
     all_peaks = unique(unlist(purrr::map(.x$Sample_Peak, ~ .x), use.names = FALSE))
     data.frame(Sample_Peak = all_peaks, semf = .y, stringsAsFactors = FALSE)
   })
+
 
   dup_peaks = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% (unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)]))) %>%
     dplyr::arrange(Sample_Peak)
