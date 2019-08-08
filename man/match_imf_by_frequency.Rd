@@ -4,17 +4,17 @@
 \alias{match_imf_by_frequency}
 \title{match peaks to IMFs by frequency}
 \usage{
-match_imf_by_frequency(imf_2_peak, unknown_peaks, peak_frequency,
-  frequency_match_cutoff)
+match_imf_by_frequency(imf_2_peak, unknown_peaks, peak_location,
+  difference_cutoff)
 }
 \arguments{
 \item{imf_2_peak}{data.frame with IMF information (see details)}
 
 \item{unknown_peaks}{data.frame of peak information}
 
-\item{peak_frequency}{data.frame with \code{Sample_Peak} and \code{Value}, where \code{Value} is \code{ObservedFrequency}}
+\item{peak_location}{data.frame with \code{Sample_Peak} and \code{Value}, where \code{Value} is \code{ObservedFrequency}}
 
-\item{frequency_match_cutoff}{the maximum difference an unknown peak can have to any of the known peaks}
+\item{difference_cutoff}{the maximum difference an unknown peak can have to any of the known peaks}
 }
 \value{
 data.frame

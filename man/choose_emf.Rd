@@ -4,15 +4,15 @@
 \alias{choose_emf}
 \title{choose most likely elemental molecular formula's}
 \usage{
-choose_emf(grouped_emfs, peak_frequency, frequency_match_cutoff,
+choose_emf(grouped_emfs, peak_location, difference_cutoff,
   keep_ratio = 0.9)
 }
 \arguments{
 \item{grouped_emfs}{list of grouped EMFs}
 
-\item{peak_frequency}{data.frame of peak frequencies}
+\item{peak_location}{data.frame of peak locations}
 
-\item{frequency_match_cutoff}{how close do peaks need to be to each other}
+\item{difference_cutoff}{how close do peaks need to be to each other}
 
 \item{keep_ratio}{how close to the maximum voted EMF to keep other things? (default is 0.9)}
 }

@@ -11,6 +11,7 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
   "mass_error", "NAP", "lbl.count", "clique_size"),
   observed_mz = "ObservedMZ", observed_frequency = "ObservedFrequency",
   height = "Height", remove_elements = "S", chosen_keep_ratio = 0.9,
+  difference_cutoff = NULL, difference_measure = "ObservedFrequency",
   progress = TRUE)
 }
 \arguments{
