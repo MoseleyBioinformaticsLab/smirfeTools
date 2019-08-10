@@ -380,7 +380,7 @@ choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio
   grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
 
   if (is.data.frame(difference_cutoff)) {
-    use_location = dplyr::filter(peak_location, Sample_Peak %in% unique(unlist(grouped_emfs$Sample_Peak)))
+    use_location = dplyr::filter(peak_location, Sample_Peak %in% unique(unlist(purrr::map(grouped_emfs, "Sample_Peak"))))
     max_location = max(use_location$Value)
 
     difference_loc = which.min(abs(max_location - difference_cutoff$Index))
