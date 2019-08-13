@@ -12,7 +12,7 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
   observed_mz = "ObservedMZ", observed_frequency = "ObservedFrequency",
   height = "Height", remove_elements = "S", chosen_keep_ratio = 0.9,
   difference_cutoff = NULL, difference_measure = "ObservedFrequency",
-  progress = TRUE)
+  use_scan_level = TRUE, progress = TRUE)
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}
@@ -34,6 +34,8 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 \item{height}{which variable holds the height / intensity}
 
 \item{chosen_keep_ratio}{what is the ratio of max to keep chosen EMFs?}
+
+\item{use_scan_level}{should scan level data be used for estimating SDs?}
 
 \item{progress}{should the progress be shown?}
 

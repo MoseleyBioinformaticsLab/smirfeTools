@@ -127,6 +127,7 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #' @param height which variable holds the height / intensity
 #' @param other_cols which other columns should be kept?
 #' @param chosen_keep_ratio what is the ratio of max to keep chosen EMFs?
+#' @param use_scan_level should scan level data be used for estimating SDs?
 #' @param progress should the progress be shown?
 #'
 #' @export
@@ -152,10 +153,29 @@ extract_assigned_data <- function(assigned_data,
                                   chosen_keep_ratio = 0.9,
                                   difference_cutoff = NULL,
                                   difference_measure = "ObservedFrequency",
+                                  use_scan_level = TRUE,
                                   progress = TRUE){
 
   if (is.null(difference_cutoff)) {
-    stop("difference_cutoff is NULL, that is not allowed. Please provide a value!")
+    warning("difference_cutoff is NULL, no checking will be done on IMFs!")
+
+    if ("ObservedFrequency" %in% difference_measure) {
+      warning("difference_cutoff set to 1 frequency point difference!")
+    } else {
+      warning("difference_cutoff will be set to 1ppm of M/Z!")
+    }
+    difference_cutoff = NA
+    names(difference_cutoff) = difference_measure
+  }
+
+  if (!use_scan_level_data) {
+    warning("use_scan_level is FALSE, not using scan information!")
+    scan_level_location = NULL
+  } else {
+    scan_level_location = purrr::map(assigned_data, ~ .x$scan_level[[difference_measure]])
+    scan_level_names = unlist(purrr::map(scan_level_location, ~ names(.x)))
+    scan_level_location = unlist(scan_level_location, recursive = FALSE, use.names = FALSE)
+    names(scan_level_location) = scan_level_names
   }
 
   start_time = Sys.time()
@@ -189,10 +209,6 @@ extract_assigned_data <- function(assigned_data,
   }
 
   peak_location = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% difference_measure))
-  scan_level_location = purrr::map(assigned_data, ~ .x$scan_level[[difference_measure]])
-  scan_level_names = unlist(purrr::map(scan_level_location, ~ names(.x)))
-  scan_level_location = unlist(scan_level_location, recursive = FALSE, use.names = FALSE)
-  names(scan_level_location) = scan_level_names
 
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)

@@ -295,23 +295,66 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
     peak_location[peak_location$Sample_Peak %in% in_imf, "Value"]
   })
 
-  imf_scan_location_sd = purrr::imap_dfr(split_peaks_imf, function(imf_peaks, in_imf){
-    tmp_scan_loc = unlist(scan_locations[imf_peaks])
-    data.frame(scan_sd = sd(tmp_scan_loc, na.rm = TRUE) * 2,
-               n_peak = length(imf_peaks),
+  # if we didn't supply a difference cutoff, then use 1ppm. Should work in
+  # either space.
+  if (is.na(difference_cutoff)) {
+    if ("ObservedMZ" %in% names(difference_cutoff)) {
+      max_loc = max(unlist(split_peaks_location))
+      difference_cutoff = max_loc / 1e6
+    } else if ("ObservedFrequency" %in% difference_cutoff) {
+      difference_cutoff = 1
+    }
+
+  }
+
+  mean_location = purrr::imap_dfr(split_peaks_location, function(peak_locs, in_imf){
+    data.frame(location = mean(peak_locs),
+               peak_sd = 2*sd(peak_locs),
+               n_peak = length(peak_locs),
                imf = in_imf,
                stringsAsFactors = FALSE)
   })
 
-  imf_scan_location_sd = imf_scan_location_sd %>% dplyr::mutate(
-    use_difference = dplyr::case_when(
-      n_peak < 2 ~ difference_cutoff,
-      scan_sd > difference_cutoff ~ difference_cutoff,
-      scan_sd <= difference_cutoff ~ scan_sd)
-  )
+  mean_location = dplyr::mutate(mean_location,
+      peak_sd2 = dplyr::case_when(is.na(peak_sd) ~ difference_cutoff,
+                                  peak_sd > difference_cutoff ~ difference_cutoff,
+                                  peak_sd <= difference_cutoff ~ peak_sd))
+
+  if (!is.null(scan_locations)) {
+    imf_scan_location_sd = purrr::imap_dfr(split_peaks_imf, function(imf_peaks, in_imf){
+      tmp_scan_loc = unlist(scan_locations[imf_peaks])
+      data.frame(scan_sd = sd(tmp_scan_loc, na.rm = TRUE) * 2,
+                 imf = in_imf,
+                 stringsAsFactors = FALSE)
+    })
+
+    mean_location = dplyr::left_join(mean_location, imf_scan_location_sd, by = "imf")
+
+    if (max(mean_location$n_peak) > 2) {
+      if (min(mean_location$n_peak) < 2) {
+        other_ranges = dplyr::filter(mean_location, n_peak > 2) %>% dplyr::pull(scan_sd) %>%
+          max()
+        low_loc = which(mean_location$n_peak < 2)
+        for (iloc in low_loc) {
+          if (mean_location[iloc, "scan_sd"] < (0.9 * other_ranges)) {
+            mean_location[iloc, "scan_sd"] = difference_cutoff
+          }
+        }
+
+      }
+    }
+
+    mean_location = dplyr::mutate(mean_location,
+      use_sd = purrr::pmap_dbl(mean_location[, c("scan_sd", "peak_sd2")],
+                               ~min(c(...), na.rm = TRUE)))
+
+  } else {
+    mean_location$use_sd = mean_location$peak_sd2
+  }
 
   peak_nap = unique(imf_2_peak[, c("complete_IMF", "NAP")]) %>%
     dplyr::arrange(dplyr::desc(NAP)) %>% dplyr::mutate(seq = seq(1, dplyr::n()))
+  mean_location = dplyr::left_join(mean_location, peak_nap, by = c("imf" = "complete_IMF"))
   split_peaks_location = split_peaks_location[peak_nap$complete_IMF]
 
   just_peaks = as.character(unknown_peaks$Peaks)
@@ -319,25 +362,19 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
   # of NAP. When the next one doesn't match, stop!
   match_location = purrr::map_df(just_peaks, function(test_peak){
     test_location = dplyr::filter(peak_location, Sample_Peak %in% test_peak)
-    diff_perc = purrr::imap_dfr(split_peaks_location, function(.x, .y){
-      tmp_cutoff = dplyr::filter(imf_scan_location_sd, imf %in% .y) %>% dplyr::pull(use_difference)
-      tmp_diff = abs(.x - test_location$Value)
-      tmp_diff = tmp_diff[!(tmp_diff == 0)]
-      data.frame(complete_IMF = .y,
-                 perc_match = sum(tmp_diff <= tmp_cutoff) / length(tmp_diff),
-                 median_match = median(tmp_diff),
-                 stringsAsFactors = FALSE)
-    })
+    mean_diffs = mean_location
+    mean_diffs$diff = abs(mean_location$location - test_location$Value)
 
-    diff_perc = dplyr::filter(diff_perc, perc_match > 0)
-    if (nrow(diff_perc) > 0) {
-      tmp_location = dplyr::slice(diff_perc, which.min(median_match))
-      match_imf = data.frame(complete_IMF = tmp_location$complete_IMF,
+    mean_diffs = dplyr::filter(mean_diffs, diff <= use_sd)
+    if (nrow(mean_diffs) > 0) {
+      tmp_location = dplyr::slice(mean_diffs, which.min(diff))
+      match_imf = data.frame(complete_IMF = tmp_location$imf,
                              PeakID = test_location$PeakID,
                              Sample = test_location$Sample,
                              Sample_Peak = test_peak,
                              complete_EMF = imf_2_peak$complete_EMF[1],
-                             seq = peak_nap[peak_nap$complete_IMF %in% tmp_location$complete_IMF, "seq"],
+                             NAP = tmp_location$NAP,
+                             seq = tmp_location$seq,
                              stringsAsFactors = FALSE)
     } else {
       match_imf = data.frame(complete_IMF = as.character(NA),
@@ -345,6 +382,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
                              Sample = as.character(NA),
                              Sample_Peak = as.character(NA),
                              complete_EMF = as.character(NA),
+                             NAP = as.double(NA),
                              seq = as.integer(NA),
                              stringsAsFactors = FALSE)
     }
@@ -398,8 +436,14 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
 
   use_peaks = unique(unlist(purrr::map(grouped_emfs, "Sample_Peak")))
   use_location = dplyr::filter(peak_location, Sample_Peak %in% use_peaks)
-  use_scans = scan_level_location[use_peaks]
-  if (is.data.frame(difference_cutoff)) {
+
+  if (!is.null(scan_level_location)) {
+    use_scans = scan_level_location[use_peaks]
+  } else {
+    use_scans = NULL
+  }
+
+  if (!any(is.na(difference_cutoff)) && is.data.frame(difference_cutoff)) {
     max_location = max(use_location$Value)
 
     difference_loc = which.min(abs(max_location - difference_cutoff$Index))
@@ -489,10 +533,14 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
   # finally, go through each EMF and the associated peaks, and confirm that *all*
   # of the peaks for each of the IMFs are within the difference_cutoff, and
   # remove any that aren't
-  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, use_location, use_difference_cutoff)
+  if (!is.na(use_difference_cutoff)) {
+    checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, use_location, use_difference_cutoff)
+    returned_emfs = do.call(rbind, checked_emfs)
+  } else {
+    returned_emfs = out_gemf_emf
+  }
 
-  do.call(rbind, checked_emfs)
-
+  returned_emfs
 }
 
 check_emf = function(in_emf, peak_location, difference_cutoff){
