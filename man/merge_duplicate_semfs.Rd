@@ -4,8 +4,8 @@
 \alias{merge_duplicate_semfs}
 \title{merge sudo EMFs with duplicate peaks}
 \usage{
-merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_location,
-  difference_cutoff, keep_ratio = 0.9)
+merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location,
+  peak_location, difference_cutoff, keep_ratio = 0.9)
 }
 \arguments{
 \item{chosen_emfs}{sudo EMFs from \code{choose_emf}}

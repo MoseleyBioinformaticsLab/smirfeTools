@@ -4,8 +4,8 @@
 \alias{remove_duplicates_across_semfs}
 \title{remove duplicate peaks across sudo EMFs}
 \usage{
-remove_duplicates_across_semfs(chosen_emfs, all_gemfs, peak_location,
-  difference_cutoff, keep_ratio = 0.9)
+remove_duplicates_across_semfs(chosen_emfs, all_gemfs, scan_level_location,
+  peak_location, difference_cutoff, keep_ratio = 0.9)
 }
 \arguments{
 \item{chosen_emfs}{merged EMFs}
