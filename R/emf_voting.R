@@ -276,51 +276,68 @@ match_imf_by_mz = function(imf_2_peak, unknown_peaks, peak_mz){
   out_evalues
 }
 
-#' match peaks to IMFs by frequency
+#' match peaks to IMFs by difference
 #'
 #' Given a data.frame of IMFs to peaks for a given EMF, attempts to match unknown peaks
-#' to IMFs based on differences in frequency to the unknown peaks.
+#' to IMFs based on differences in the provided values to the unknown peaks.
 #'
 #' @param imf_2_peak data.frame with IMF information (see details)
 #' @param unknown_peaks data.frame of peak information
+#' @param scan_locations list of locations for each peak across scans
 #' @param peak_location data.frame with `Sample_Peak` and `Value`, where `Value` is `ObservedFrequency`
 #' @param difference_cutoff the maximum difference an unknown peak can have to any of the known peaks
 #'
 #' @return data.frame
 #' @export
-match_imf_by_frequency = function(imf_2_peak, unknown_peaks, peak_location, difference_cutoff){
+match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, peak_location, difference_cutoff){
   split_peaks_imf = split(imf_2_peak$Sample_Peak, imf_2_peak$complete_IMF)
-  split_peaks_frequency = purrr::map(split_peaks_imf, function(in_imf){
+  split_peaks_location = purrr::map(split_peaks_imf, function(in_imf){
     peak_location[peak_location$Sample_Peak %in% in_imf, "Value"]
   })
 
+  imf_scan_location_sd = purrr::imap_dfr(split_peaks_imf, function(imf_peaks, in_imf){
+    tmp_scan_loc = unlist(scan_locations[imf_peaks])
+    data.frame(scan_sd = sd(tmp_scan_loc, na.rm = TRUE) * 2,
+               n_peak = length(imf_peaks),
+               imf = in_imf,
+               stringsAsFactors = FALSE)
+  })
+
+  imf_scan_location_sd = imf_scan_location_sd %>% dplyr::mutate(
+    use_difference = dplyr::case_when(
+      n_peak < 2 ~ difference_cutoff,
+      scan_sd > difference_cutoff ~ difference_cutoff,
+      scan_sd <= difference_cutoff ~ scan_sd)
+  )
+
   peak_nap = unique(imf_2_peak[, c("complete_IMF", "NAP")]) %>%
     dplyr::arrange(dplyr::desc(NAP)) %>% dplyr::mutate(seq = seq(1, dplyr::n()))
-  split_peaks_frequency = split_peaks_frequency[peak_nap$complete_IMF]
+  split_peaks_location = split_peaks_location[peak_nap$complete_IMF]
 
   just_peaks = as.character(unknown_peaks$Peaks)
   # this also needs to have the peaks sorted by their NAP, and match in order
   # of NAP. When the next one doesn't match, stop!
-  match_frequency = purrr::map_df(just_peaks, function(test_peak){
-    test_frequency = dplyr::filter(peak_location, Sample_Peak %in% test_peak)
-    frequency_diff_perc = purrr::imap_dfr(split_peaks_frequency, function(.x, .y){
-      tmp_diff = abs(.x - test_frequency$Value)
+  match_location = purrr::map_df(just_peaks, function(test_peak){
+    test_location = dplyr::filter(peak_location, Sample_Peak %in% test_peak)
+    diff_perc = purrr::imap_dfr(split_peaks_location, function(.x, .y){
+      tmp_cutoff = dplyr::filter(imf_scan_location_sd, imf %in% .y) %>% dplyr::pull(use_difference)
+      tmp_diff = abs(.x - test_location$Value)
       tmp_diff = tmp_diff[!(tmp_diff == 0)]
       data.frame(complete_IMF = .y,
-                 perc_match = sum(tmp_diff <= difference_cutoff) / length(tmp_diff),
+                 perc_match = sum(tmp_diff <= tmp_cutoff) / length(tmp_diff),
                  median_match = median(tmp_diff),
                  stringsAsFactors = FALSE)
     })
 
-    frequency_diff_perc = dplyr::filter(frequency_diff_perc, perc_match > 0)
-    if (nrow(frequency_diff_perc) > 0) {
-      tmp_frequency = dplyr::slice(frequency_diff_perc, which.min(median_match))
-      match_imf = data.frame(complete_IMF = tmp_frequency$complete_IMF,
-                             PeakID = test_frequency$PeakID,
-                             Sample = test_frequency$Sample,
+    diff_perc = dplyr::filter(diff_perc, perc_match > 0)
+    if (nrow(diff_perc) > 0) {
+      tmp_location = dplyr::slice(diff_perc, which.min(median_match))
+      match_imf = data.frame(complete_IMF = tmp_location$complete_IMF,
+                             PeakID = test_location$PeakID,
+                             Sample = test_location$Sample,
                              Sample_Peak = test_peak,
                              complete_EMF = imf_2_peak$complete_EMF[1],
-                             seq = peak_nap[peak_nap$complete_IMF %in% tmp_frequency$complete_IMF, "seq"],
+                             seq = peak_nap[peak_nap$complete_IMF %in% tmp_location$complete_IMF, "seq"],
                              stringsAsFactors = FALSE)
     } else {
       match_imf = data.frame(complete_IMF = as.character(NA),
@@ -334,28 +351,28 @@ match_imf_by_frequency = function(imf_2_peak, unknown_peaks, peak_location, diff
     match_imf
   })
 
-  match_frequency = match_frequency[!is.na(match_frequency$complete_IMF), ]
+  match_location = match_location[!is.na(match_location$complete_IMF), ]
 
   null_evalue = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], e_value = NA, stringsAsFactors = FALSE)
-  if (nrow(match_frequency) > 0) {
-    match_frequency = dplyr::arrange(match_frequency, seq)
-    seq_match = all(match_frequency$seq == seq_len(nrow(match_frequency)))
-    unique_match = length(unique(match_frequency$complete_IMF)) == nrow(match_frequency)
+  if (nrow(match_location) > 0) {
+    match_location = dplyr::arrange(match_location, seq)
+    seq_match = all(match_location$seq == seq_len(nrow(match_location)))
+    unique_match = length(unique(match_location$complete_IMF)) == nrow(match_location)
 
     if (!(seq_match && unique_match)) {
-      #print(match_frequency)
-      match_frequency = match_frequency[1,]
-      match_frequency[1, ] = NA
+      #print(match_location)
+      match_location = match_location[1,]
+      match_location[1, ] = NA
     }
   } else {
-    match_frequency = match_frequency[1,]
-    match_frequency[1, ] = NA
+    match_location = match_location[1,]
+    match_location[1, ] = NA
   }
 
   out_evalues = null_evalue
-  out_evalues$info = list(match_frequency)
-  out_evalues$Sample_Peak = list(match_frequency$Sample_Peak)
-  out_evalues$Sample = match_frequency$Sample[1]
+  out_evalues$info = list(match_location)
+  out_evalues$Sample_Peak = list(match_location$Sample_Peak)
+  out_evalues$Sample = match_location$Sample[1]
   out_evalues$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
 
   out_evalues
@@ -376,11 +393,13 @@ match_imf_by_frequency = function(imf_2_peak, unknown_peaks, peak_location, diff
 #'
 #' @return data.frame
 #' @export
-choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio = 0.9){
+choose_emf = function(grouped_emfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
   grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
 
+  use_peaks = unique(unlist(purrr::map(grouped_emfs, "Sample_Peak")))
+  use_location = dplyr::filter(peak_location, Sample_Peak %in% use_peaks)
+  use_scans = scan_level_location[use_peaks]
   if (is.data.frame(difference_cutoff)) {
-    use_location = dplyr::filter(peak_location, Sample_Peak %in% unique(unlist(purrr::map(grouped_emfs, "Sample_Peak"))))
     max_location = max(use_location$Value)
 
     difference_loc = which.min(abs(max_location - difference_cutoff$Index))
@@ -451,7 +470,7 @@ choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio
       imf_by_emf = split(has_imf, has_imf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
-        match_imf_by_frequency(x[[1]], x[[2]], peak_location, use_difference_cutoff)
+        match_imf_by_difference(x[[1]], x[[2]], use_scans, use_location, use_difference_cutoff)
       })
       imf_matches = imf_matches[!is.na(imf_matches$Sample), ]
 
@@ -470,7 +489,7 @@ choose_emf = function(grouped_emfs, peak_location, difference_cutoff, keep_ratio
   # finally, go through each EMF and the associated peaks, and confirm that *all*
   # of the peaks for each of the IMFs are within the difference_cutoff, and
   # remove any that aren't
-  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, peak_location, use_difference_cutoff)
+  checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, use_location, use_difference_cutoff)
 
   do.call(rbind, checked_emfs)
 
@@ -546,7 +565,7 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
 #'
 #' @return list of sudo EMFs after voting
 #' @export
-remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_location, difference_cutoff, keep_ratio = 0.9){
+remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
   peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
     #message(.y)
     data.frame(Sample_Peak = unique(unlist(.x$Sample_Peak, use.names = FALSE)),
@@ -573,7 +592,7 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_location,
     good_gemfs = dplyr::filter(peak_2_gemf, !(grouped_emf %in% bad_gemfs$grouped_emf))
 
     if (nrow(good_gemfs) > 0) {
-      return(choose_emf(all_gemfs[unique(good_gemfs$grouped_emf)], peak_location, difference_cutoff, keep_ratio))
+      return(choose_emf(all_gemfs[unique(good_gemfs$grouped_emf)], scan_level_location, peak_location, difference_cutoff, keep_ratio))
     } else {
       return(NULL)
     }
@@ -603,7 +622,7 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, peak_location,
 #'
 #' @return list
 #' @export
-merge_duplicate_semfs = function(chosen_emfs, all_gemfs, peak_location, difference_cutoff, keep_ratio = 0.9){
+merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
   peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
     all_peaks = unique(unlist(purrr::map(.x$Sample_Peak, ~ .x), use.names = FALSE))
     data.frame(Sample_Peak = all_peaks, semf = .y, stringsAsFactors = FALSE)
@@ -647,13 +666,13 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, peak_location, differen
 
   chosen_nondup = chosen_emfs[!(names(chosen_emfs) %in% use_semfs)]
   chosen_duplicates = internal_map$map_function(merged_gemfs, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_location, difference_cutoff, keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, keep_ratio)
   })
 
   all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
   names(all_chosen_emfs) = paste0("SEMF.", seq(1, length(all_chosen_emfs)))
 
-  remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, peak_location, difference_cutoff, keep_ratio)
+  remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio)
 
 }
 
@@ -772,6 +791,10 @@ extract_emfs = function(chosen_emfs){
 extract_imf_emf_data = function(emfs, by = "EMF"){
   all_compared = internal_map$map_function(emfs, compare_extract_emfs, by = by)
 
+  if (is.null(names(all_compared))) {
+    names(all_compared) = paste0("SEMF.", seq_along(all_compared))
+  }
+
   if ("EMF" %in% by) {
     all_height = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
       semf_height = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
@@ -815,6 +838,8 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
     all_height = purrr::map2(all_compared, names(all_compared), function(.x, .y){
       peak_id = paste0(.y,"_", names(.x$info))
       out_height = .x$height
+      n_height = nrow(out_height)
+      message(paste0(.y, " ", n_height))
       rownames(out_height) = peak_id
       out_height
     }) %>% do.call(rbind, .)

@@ -189,20 +189,25 @@ extract_assigned_data <- function(assigned_data,
   }
 
   peak_location = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% difference_measure))
+  scan_level_location = purrr::map(assigned_data, ~ .x$scan_level[[difference_measure]])
+  scan_level_names = unlist(purrr::map(scan_level_location, ~ names(.x)))
+  scan_level_location = unlist(scan_level_location, recursive = FALSE, use.names = FALSE)
+  names(scan_level_location) = scan_level_names
+
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], peak_location, difference_cutoff, chosen_keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   })
 
   null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
   chosen_emfs = chosen_emfs[!null_chosen]
 
   # debugging version
-  # chosen_emfs = internal_map$map_function(seq_along(sudo_emf_list), function(.x){
+  # chosen_emfs = purrr::map(seq_along(sudo_emf_list), function(.x){
   #   message(.x)
-  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], peak_frequency, frequency_match_cutoff, chosen_keep_ratio)
+  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   # })
 
-  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, peak_location, difference_cutoff, chosen_keep_ratio)
+  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
