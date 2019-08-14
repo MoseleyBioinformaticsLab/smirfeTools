@@ -123,10 +123,13 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #' @param emf which variable holds the EMF information
 #' @param sample which variable holds the sample
 #' @param observed_mz which variable holds the observed M/Z
+#' @param observe_frequency which variable holds the observed frequency data
 #' @param assigned_mz which variable holds the assigned M/Z
 #' @param height which variable holds the height / intensity
 #' @param other_cols which other columns should be kept?
 #' @param chosen_keep_ratio what is the ratio of max to keep chosen EMFs?
+#' @param difference_cutoff what is the maximum difference that peaks in an IMF should have?
+#' @param difference_measure which set of values from the data should be used to check differences?
 #' @param use_scan_level should scan level data be used for estimating SDs?
 #' @param progress should the progress be shown?
 #'
@@ -168,7 +171,7 @@ extract_assigned_data <- function(assigned_data,
     names(difference_cutoff) = difference_measure
   }
 
-  if (!use_scan_level_data) {
+  if (!use_scan_level) {
     warning("use_scan_level is FALSE, not using scan information!")
     scan_level_location = NULL
   } else {
