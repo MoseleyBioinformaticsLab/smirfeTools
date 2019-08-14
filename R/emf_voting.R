@@ -298,6 +298,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
   # if we didn't supply a difference cutoff, then use 1ppm. Should work in
   # either space.
   if (is.na(difference_cutoff)) {
+    "!DEBUG using 1 ppm or 1 frequency cutoff"
     if ("ObservedMZ" %in% names(difference_cutoff)) {
       max_loc = max(unlist(split_peaks_location))
       difference_cutoff = max_loc / 1e6
@@ -321,6 +322,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
                                   peak_sd <= difference_cutoff ~ peak_sd))
 
   if (!is.null(scan_locations)) {
+    "!DEBUG using scan level data"
     imf_scan_location_sd = purrr::imap_dfr(split_peaks_imf, function(imf_peaks, in_imf){
       tmp_scan_loc = unlist(scan_locations[imf_peaks])
       data.frame(scan_sd = sd(tmp_scan_loc, na.rm = TRUE) * 2,
@@ -349,6 +351,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
                                ~min(c(...), na.rm = TRUE)))
 
   } else {
+    "!DEBUG no scan level data used"
     mean_location$use_sd = mean_location$peak_sd2
   }
 
@@ -534,9 +537,11 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
   # of the peaks for each of the IMFs are within the difference_cutoff, and
   # remove any that aren't
   if (!is.na(use_difference_cutoff)) {
+    "!DEBUG checking imfs"
     checked_emfs = purrr::map(split(out_gemf_emf, out_gemf_emf$complete_EMF), check_emf, use_location, use_difference_cutoff)
     returned_emfs = do.call(rbind, checked_emfs)
   } else {
+    "!DEBUG No checking imfs"
     returned_emfs = out_gemf_emf
   }
 
