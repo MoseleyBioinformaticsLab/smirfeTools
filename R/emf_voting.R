@@ -302,7 +302,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
     if ("ObservedMZ" %in% names(difference_cutoff)) {
       max_loc = max(unlist(split_peaks_location))
       difference_cutoff = max_loc / 1e6
-    } else if ("ObservedFrequency" %in% difference_cutoff) {
+    } else if ("ObservedFrequency" %in% names(difference_cutoff)) {
       difference_cutoff = 1
     }
 
