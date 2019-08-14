@@ -4,9 +4,8 @@
 \alias{choose_single_peak}
 \title{choose a peak}
 \usage{
-choose_single_peak(mz_diff_data, imf = "IMF",
-  sample_peak = "Sample_Peak", sample = "Sample",
-  data_col = "Assignment_Data")
+choose_single_peak(mz_diff_data, imf = "IMF", sample_peak = "Sample_Peak",
+  sample = "Sample", data_col = "Assignment_Data")
 }
 \arguments{
 \item{mz_diff_data}{the data.frame with mz_errors}

@@ -4,8 +4,7 @@
 \alias{read_smirfe_assignment}
 \title{read SMIRFE assignments}
 \usage{
-read_smirfe_assignment(smirfe_assignment, assigned_only = TRUE,
-  .pb = NULL)
+read_smirfe_assignment(smirfe_assignment, assigned_only = TRUE, .pb = NULL)
 }
 \arguments{
 \item{smirfe_assignment}{the set of assignment results}

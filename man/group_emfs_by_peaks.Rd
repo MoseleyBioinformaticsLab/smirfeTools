@@ -4,8 +4,8 @@
 \alias{group_emfs_by_peaks}
 \title{EMFs to Peaks}
 \usage{
-group_emfs_by_peaks(peak_info, peak_var = "peak",
-  emf_var = "complete_EMF", grouping_var = "grouped_EMF")
+group_emfs_by_peaks(peak_info, peak_var = "peak", emf_var = "complete_EMF",
+  grouping_var = "grouped_EMF")
 }
 \arguments{
 \item{peak_info}{data.frame mapping peaks to EMFs}
