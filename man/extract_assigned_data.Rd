@@ -35,11 +35,17 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 
 \item{chosen_keep_ratio}{what is the ratio of max to keep chosen EMFs?}
 
+\item{difference_cutoff}{what is the maximum difference that peaks in an IMF should have?}
+
+\item{difference_measure}{which set of values from the data should be used to check differences?}
+
 \item{use_scan_level}{should scan level data be used for estimating SDs?}
 
 \item{progress}{should the progress be shown?}
 
 \item{remove_secondary}{remove the seconardy assignments? (default is TRUE)}
+
+\item{observe_frequency}{which variable holds the observed frequency data}
 
 \item{assigned_mz}{which variable holds the assigned M/Z}
 
