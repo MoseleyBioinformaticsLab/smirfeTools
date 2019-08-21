@@ -4,7 +4,8 @@
 \alias{keep_imf_adducts}
 \title{extracts IMF adducts}
 \usage{
-keep_imf_adducts(assignments, imf = "complete_IMF", adduct = "adduct_IMF")
+keep_imf_adducts(assignments, imf = "complete_IMF",
+  adduct = "adduct_IMF")
 }
 \arguments{
 \item{assignments}{a data.frame of assignments}
