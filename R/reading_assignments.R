@@ -220,6 +220,8 @@ extract_assigned_data <- function(assigned_data,
   null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
   chosen_emfs = chosen_emfs[!null_chosen]
 
+  n_chosen = length(chosen_emfs)
+
   # debugging version
   # chosen_emfs = purrr::map(seq_along(sudo_emf_list), function(.x){
   #   message(.x)
@@ -231,6 +233,8 @@ extract_assigned_data <- function(assigned_data,
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
   merged_chosen_emfs = merged_chosen_emfs[!null_chosen2]
+
+  n_merged = length(merged_chosen_emfs)
 
   if (progress) {
     message("Extracting EMF matrices ...")
@@ -304,7 +308,9 @@ extract_assigned_data <- function(assigned_data,
   }
   return(list(emfs = extracted_emfs_height_mz,
               emf_info = all_assignments,
-              tic = get_tic(assigned_data)))
+              tic = get_tic(assigned_data),
+              n_emfs = list(chosen = n_chosen,
+                            merged = n_merged)))
 }
 
 filter_peak_imfs <- function(peak_assignments, imf = "complete_IMF", e_value = "e_value"){
