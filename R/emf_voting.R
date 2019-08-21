@@ -892,7 +892,7 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
       peak_id = paste0(.y,"_", names(.x$info))
       out_height = .x$height
       n_height = nrow(out_height)
-      message(paste0(.y, " ", n_height))
+      #message(paste0(.y, " ", n_height))
       rownames(out_height) = peak_id
       out_height
     }) %>% do.call(rbind, .)
@@ -926,8 +926,8 @@ compare_extract_emfs = function(emf, by = "EMF"){
     names(split_groups) = paste0("IMF.", seq_along(split_groups))
     single_index = purrr::map_df(split_groups, ~ .x[1, ])
 
-    out_height = compare_heights[single_index$row_index, ]
-    out_mz = compare_mz[single_index$row_index, ]
+    out_height = compare_heights[single_index$row_index, , drop = FALSE]
+    out_mz = compare_mz[single_index$row_index, , drop = FALSE]
 
     out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
 
