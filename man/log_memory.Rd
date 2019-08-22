@@ -6,9 +6,7 @@
 \usage{
 log_memory()
 }
-\arguments{
-\item{log_obj}{the log object to use to log the memory}
-}
 \description{
-log memory usage
+Logs the amount of memory being used to a log file if it is available, and
+generating warnings if the amount of RAM hits zero.
 }
