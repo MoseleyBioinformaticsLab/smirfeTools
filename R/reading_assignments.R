@@ -13,6 +13,7 @@
 #' @export
 #'
 read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb = NULL){
+  log_memory()
   if (!is.null(.pb)) {
     knitrProgressBar::update_progress(.pb)
   }
@@ -52,6 +53,7 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
 
                                      tmp_list[keep_peaks]
                                    })
+  log_memory()
 
   list(tic = tmp_list$TIC,
        assignments = peak_assignments,
@@ -185,6 +187,7 @@ extract_assigned_data <- function(assigned_data,
   if (progress) {
     message("Generating EMF cliques from each sample ...")
   }
+  log_message("Generating EMF cliques from each sample ...")
 
   names(assigned_data) = NULL
   within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
@@ -203,6 +206,8 @@ extract_assigned_data <- function(assigned_data,
   if (progress) {
     message("Creating pseudo EMFs across cliques ...")
   }
+  log_message("Creating pseudo EMFs across cliques ...")
+  log_memory()
   sudo_emf_list = create_sudo_emfs(all_gemf_emf_mapping)
   # next things:
   all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FALSE)
@@ -210,6 +215,7 @@ extract_assigned_data <- function(assigned_data,
   if (progress) {
     message("Choosing EMFs by voting ...")
   }
+  log_message("Choosing EMFs by voting ...")
 
   peak_location = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% difference_measure))
 
@@ -235,10 +241,11 @@ extract_assigned_data <- function(assigned_data,
   merged_chosen_emfs = merged_chosen_emfs[!null_chosen2]
 
   n_merged = length(merged_chosen_emfs)
-
+  log_memory()
   if (progress) {
     message("Extracting EMF matrices ...")
   }
+  log_message("Extracting EMF matrices ...")
   extracted_emfs = extract_emfs(merged_chosen_emfs)
 
   peak_height = purrr::map_df(assigned_data, function(in_assign){
@@ -301,11 +308,13 @@ extract_assigned_data <- function(assigned_data,
 
   all_assignments = dplyr::filter(all_assignments, complete_EMF %in% unique(all_emfs$complete_EMF))
 
+  stop_time = Sys.time()
+  diff_time = difftime(stop_time, start_time)
+  time_message = paste0("Done in ", diff_time, " ", attr(diff_time, "units"))
   if (progress) {
-    stop_time = Sys.time()
-    diff_time = difftime(stop_time, start_time)
-    message(paste0("Done in ", diff_time, " ", attr(diff_time, "units")))
+    message(time_message)
   }
+  log_message(time_message)
   return(list(emfs = extracted_emfs_height_mz,
               emf_info = all_assignments,
               tic = get_tic(assigned_data),

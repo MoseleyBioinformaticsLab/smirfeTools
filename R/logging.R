@@ -1,6 +1,7 @@
 #' log memory usage
 #'
-#' @param log_obj the log object to use to log the memory
+#' Logs the amount of memory being used to a log file if it is available, and
+#' generating warnings if the amount of RAM hits zero.
 #'
 #' @export
 #' @return NULL
@@ -14,7 +15,7 @@ log_memory = function(){
 
   if (any(memory_numbers == 0)) {
     if (get("logger", envir = has_logger)) {
-      logger::log_error(memory_string, namespace = "smirfeTools")
+      logger::log_warn(memory_string, namespace = "smirfeTools")
     } else {
       warning(memory_string)
     }
@@ -22,5 +23,19 @@ log_memory = function(){
     if (get("logger", envir = has_logger)) {
       logger::log_info(memory_string, namespace = "smirfeTools")
     }
+  }
+}
+
+#' log messages
+#'
+#' If a log_appender is available, logs the given message at the `info` level.
+#'
+#' @param message_string the string to put in the message
+#'
+#' @export
+#' @return NULL
+log_message = function(message_string){
+  if (get("logger", envir = has_logger)) {
+    logger::log_info(message_string, namespace = "smirfeTools")
   }
 }

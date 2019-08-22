@@ -11,7 +11,8 @@
 #'
 #' @export
 get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
-  sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
+  log_memory()
+  #sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
   # add the adduct information into the EMF information
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
   e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
@@ -138,7 +139,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
     })
   }
 
-
+  log_memory()
   return(list(grouped_emf = grouped_emf_peaks, multi_evidence = multi_evidence_emf))
   # we should add the peaks to GEMF mapping here, so we can do what is noted on the last line.
 }
@@ -544,6 +545,7 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
     "!DEBUG No checking imfs"
     returned_emfs = out_gemf_emf
   }
+  log_memory()
 
   returned_emfs
 }
