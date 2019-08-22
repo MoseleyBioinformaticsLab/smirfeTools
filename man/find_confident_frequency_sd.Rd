@@ -14,6 +14,9 @@ find_confident_frequency_sd(assigned_data, low_evalue_cutoff = 0.1,
 
 \item{low_mz_cutoff}{the upper bound for \emph{confident} assignments in M/Z}
 }
+\value{
+data.frame with sd values
+}
 \description{
 Given a list of EMF assignment data from SMIRFE, attempts to find \emph{confident}
 EMF assignments, and use those combined with scan level frequency information

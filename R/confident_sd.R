@@ -9,7 +9,7 @@
 #' @param low_mz_cutoff the upper bound for *confident* assignments in M/Z
 #'
 #' @export
-#' @return
+#' @return data.frame with sd values
 find_confident_frequency_sd = function(assigned_data,
                              low_evalue_cutoff = 0.1,
                              low_mz_cutoff = 600,
