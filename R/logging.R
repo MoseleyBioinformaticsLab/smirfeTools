@@ -39,3 +39,15 @@ log_message = function(message_string){
     logger::log_info(message_string, namespace = "smirfeTools")
   }
 }
+
+#' disable logging
+#'
+#' In certain situations it may be good to disable logging altogether. This allows
+#' that.
+#'
+#' @export
+#' @return NULL
+disable_logging = function(){
+  assign("logger", FALSE, envir = has_logger)
+  message("Logging disabled.char")
+}
