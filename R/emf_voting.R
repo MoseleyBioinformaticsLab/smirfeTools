@@ -1,3 +1,40 @@
+#' calculate assignment scores
+#'
+#' Given the assignment data.frame, calculate new scores for every assignment.
+#' The default is 1 - e_value, with a weighting of 1.
+#'
+#' @param sample_assignments the assignments data.frame
+#' @param variable the variable to calculate scores from
+#' @param weight multiplier to apply to the scores (default = 1)
+#' @param calculation how to calculate the scores (default = "one_minus")
+#'
+#' @export
+#' @return data.frame of assignments with scores added
+calculate_assignment_scores = function(single_sample, variable = "e_value",
+                            weight = 1, calculation = "one_minus"){
+  sample_assignments = single_sample$assignments
+  sample_assignments$peak_imf = paste0(sample_assignments$Sample_Peak, sample_assignments$complete_IMF, sample_assignments$adduct_IMF)
+  split_assignments = split(sample_assignments, sample_assignments$peak_imf)
+
+  score_them = function(peak_df, variable, weight, calculation){
+    variable_row = peak_df[peak_df$Type %in% variable, ]
+    value = as.numeric(variable_row$Assignment_Data[1])
+
+    score = switch(calculation,
+                   one_minus = (1 - value) * weight)
+    score_row = variable_row
+    score_row$Type = "score"
+    score_row$Assignment_Data = as.character(score)
+    rbind(peak_df, score_row)
+  }
+
+  score_assignments = purrr::map_df(split_assignments, score_them,
+                                    variable, weight, calculation)
+  score_assignments$peak_imf = NULL
+  single_sample$assignments = score_assignments
+  single_sample
+}
+
 #' extract sample level elemental molecular formulas
 #'
 #' given the assignment data.frame, group and extract EMF level information
@@ -12,12 +49,17 @@
 #' @export
 get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
   log_memory()
+  if (!("score" %in% sample_assignments$Type)) {
+    stop("The data is missing the *score* Type, do you need to run `calculate_assignment_scores`?")
+  }
   #sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
   # add the adduct information into the EMF information
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
   e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
+  scores = dplyr::filter(sample_assignments, Type %in% "score") %>% dplyr::mutate(score = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   evalue_clique_size = dplyr::left_join(e_values, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
+  score_clique_size = dplyr::left_join(scores, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
 
 
   # split the peaks by which EMF they were assigned to, and then for each
@@ -48,6 +90,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
 
     # the true e-value is the one that corresponds to the actual clique size, or what should be the maximum of the clique size
     grouped_evalues = purrr::map_dbl(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(e_value))
+    grouped_scores = purrr::map_dbl(x$complete_EMF, ~ dplyr::filter(score_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(score))
     grouped_clique_size = purrr::map_int(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(clique_size))
 
     keep_emf = grouped_evalues <= evalue_cutoff
@@ -56,7 +99,9 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
       return(list(complete_EMF = x$complete_EMF,
                   peak_info = peak_info[keep_emf],
                   e_values = dplyr::mutate(x, e_value = grouped_evalues[keep_emf], Sample = sample_id, complete_EMF = complete_EMF, type = "primary"),
+                  scores = dplyr::mutate(x, score = grouped_scores[keep_emf], Sample = sample_id, complete_EMF = complete_EMF, type = "primary"),
                   min_e_value = min(grouped_evalues[keep_emf]),
+                  max_score = max(grouped_scores[keep_emf]),
                   clique_size = grouped_clique_size[1],
                   PeakID = use_peaks,
                   Sample_Peak = paste0(peak_info[[1]]$Sample[1], "_", use_peaks)
@@ -102,6 +147,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   if (use_corroborating) {
     # extract the e-values for each one
     all_evalues = purrr::map_df(grouped_emf_peaks, ~ .x$e_values)
+    all_scores = purrr::map_df(grouped_emf_peaks, ~ .x$scores)
 
     gep_2_complete_emf = purrr::map2_dfr(grouped_emf_peaks, names(grouped_emf_peaks),
                                          function(.x, .y){
@@ -113,7 +159,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
     unique_gep = unique(gep_2_complete_emf$gep)
     has_multi_evidence = which(names(grouped_emf_peaks) %in% unique_gep)
 
-    # add in the e-values, with the note that they are from "corroborating" evidence,
+    # add in the e-values and scores, with the note that they are from "corroborating" evidence,
     # so the actual assignments can be filtered out at the voting step.
     grouped_emf_peaks = purrr::map_at(grouped_emf_peaks, has_multi_evidence, function(gep){
       curr_evalues = gep$e_values
@@ -133,7 +179,27 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
         }
         base_data
       })
+
       gep$e_values = multi_evalues
+
+      curr_scores = gep$scores
+      multi_scores = purrr::map_df(seq_len(nrow(curr_scores)), function(curr_row){
+        base_data = curr_scores[curr_row, ]
+
+        use_iso_emf = dplyr::filter(multi_evidence_emf, complete_EMF %in% base_data$complete_EMF) %>%
+          dplyr::pull(isotopologue_EMF)
+        emf_matches = dplyr::filter(multi_evidence_emf, !(complete_EMF %in% base_data$complete_EMF), isotopologue_EMF %in% use_iso_emf) %>%
+          dplyr::pull(complete_EMF)
+
+        if (length(emf_matches) > 0) {
+          other_data = dplyr::filter(all_scores, complete_EMF %in% emf_matches) %>%
+            dplyr::mutate(complete_EMF = base_data$complete_EMF, type = "corroborating")
+          base_data = rbind(base_data, other_data)
+        }
+        base_data
+      })
+      gep$scores = multi_scores
+
       gep
 
     })
@@ -395,7 +461,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 
   match_location = match_location[!is.na(match_location$complete_IMF), ]
 
-  null_evalue = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], e_value = NA, stringsAsFactors = FALSE)
+  null_scores = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], score = NA, stringsAsFactors = FALSE)
   if (nrow(match_location) > 0) {
     match_location = dplyr::arrange(match_location, seq)
     seq_match = all(match_location$seq == seq_len(nrow(match_location)))
@@ -411,13 +477,13 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
     match_location[1, ] = NA
   }
 
-  out_evalues = null_evalue
-  out_evalues$info = list(match_location)
-  out_evalues$Sample_Peak = list(match_location$Sample_Peak)
-  out_evalues$Sample = match_location$Sample[1]
-  out_evalues$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
+  out_scores = null_scores
+  out_scores$info = list(match_location)
+  out_scores$Sample_Peak = list(match_location$Sample_Peak)
+  out_scores$Sample = match_location$Sample[1]
+  out_scores$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
 
-  out_evalues
+  out_scoress
 }
 
 
@@ -436,7 +502,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 #' @return data.frame
 #' @export
 choose_emf = function(grouped_emfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
-  grouped_evalues = purrr::map_df(grouped_emfs, ~ .x$e_values) %>% dplyr::mutate(information = 1 - e_value)
+  grouped_scores = purrr::map_df(grouped_emfs, ~ .x$scores)
 
   use_peaks = unique(unlist(purrr::map(grouped_emfs, "Sample_Peak")))
   use_location = dplyr::filter(peak_location, Sample_Peak %in% use_peaks)
@@ -457,50 +523,50 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
   }
 
 
-  # sum 1-evalue across the samples for each EMF, and keep those things that are
+  # sum scores across the samples for each EMF, and keep those things that are
   # within X% of the highest sum
-  emf_votes = dplyr::group_by(grouped_evalues, complete_EMF) %>% dplyr::summarise(sum_information = sum(information)) %>%
-    dplyr::mutate(max_ratio = sum_information / max(sum_information))
+  emf_votes = dplyr::group_by(grouped_scores, complete_EMF) %>% dplyr::summarise(sum_scores = sum(score)) %>%
+    dplyr::mutate(max_ratio = sum_scores / max(sum_scores))
   keep_emf = dplyr::filter(emf_votes, max_ratio >= keep_ratio)
 
-  null_evalue = data.frame(complete_EMF = NA, e_value = NA, stringsAsFactors = FALSE)
+  null_score = data.frame(complete_EMF = NA, score = NA, stringsAsFactors = FALSE)
   gemf_emf = purrr::map2_dfr(grouped_emfs, names(grouped_emfs), function(.x, .y){
     sample_from_grouped_emf = stringr::str_split_fixed(.y, "\\.", 2)[2]
-    e_values = dplyr::filter(.x$e_values, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary") %>% dplyr::select(complete_EMF, e_value)
+    scores = dplyr::filter(.x$score, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary") %>% dplyr::select(complete_EMF, score)
 
-    if (nrow(e_values) > 0) {
-      e_values$info = vector(mode = "list", length = nrow(e_values))
-      e_values$Sample_Peak = vector(mode = "list", length = nrow(e_values))
-      use_info = .x$peak_info[e_values$complete_EMF]
-      e_values$info = purrr::map(use_info, function(in_info){
+    if (nrow(scores) > 0) {
+      scores$info = vector(mode = "list", length = nrow(scores))
+      scores$Sample_Peak = vector(mode = "list", length = nrow(scores))
+      use_info = .x$peak_info[scores$complete_EMF]
+      scores$info = purrr::map(use_info, function(in_info){
         in_info %>% dplyr::filter(Type %in% "NAP") %>% dplyr::mutate(NAP = as.numeric(Assignment_Data)) %>%
           dplyr::select(complete_IMF, PeakID, Sample, Sample_Peak, complete_EMF, NAP) %>%
           unique()
       })
 
-      e_values$Sample_Peak = list(.x$Sample_Peak)
-      e_values$Sample = as.character(sample_from_grouped_emf)
-      e_values$grouped_emf = as.character(.y)
+      scores$Sample_Peak = list(.x$Sample_Peak)
+      scores$Sample = as.character(sample_from_grouped_emf)
+      scores$grouped_emf = as.character(.y)
     } else {
-      e_values = null_evalue
-      e_values$info = vector(mode = "list", length = nrow(e_values))
-      e_values$Sample_Peak = list(.x$Sample_Peak)
-      e_values$Sample = as.character(sample_from_grouped_emf)
-      e_values$grouped_emf = as.character(.y)
+      scores = null_score
+      scores$info = vector(mode = "list", length = nrow(scores))
+      scores$Sample_Peak = list(.x$Sample_Peak)
+      scores$Sample = as.character(sample_from_grouped_emf)
+      scores$grouped_emf = as.character(.y)
     }
-    e_values
+    scores
   })
-  na_evalues = purrr::map_lgl(gemf_emf$e_value, is.na)
+  na_scores = purrr::map_lgl(gemf_emf$scores, is.na)
 
   # if (sum(na_evalues) > 0) {
   #   message("Found one!")
   # }
 
-  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$Sample_Peak[!na_evalues], ~ .x), use.names = FALSE))
+  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$Sample_Peak[!na_scores], ~ .x), use.names = FALSE))
 
-  if (sum(na_evalues) > 0) {
-    trimmed_gemf_emf = gemf_emf[!na_evalues, ]
-    missing_imf = purrr::map(which(na_evalues), function(.x){
+  if (sum(na_scores) > 0) {
+    trimmed_gemf_emf = gemf_emf[!na_scores, ]
+    missing_imf = purrr::map(which(na_scores), function(.x){
       tmp_df = data.frame(Peaks = as.character(gemf_emf$Sample_Peak[[.x]]), Sample = gemf_emf$Sample[.x],
                           grouped_emf = gemf_emf$grouped_emf[.x], stringsAsFactors = FALSE)
       if (all(tmp_df$Peaks %in% have_imf_peaks)) {
