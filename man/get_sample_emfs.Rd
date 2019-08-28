@@ -4,8 +4,8 @@
 \alias{get_sample_emfs}
 \title{extract sample level elemental molecular formulas}
 \usage{
-get_sample_emfs(sample_assignments, sample_id, evalue_cutoff = 0.98,
-  use_corroborating = TRUE)
+get_sample_emfs(sample_assignments, sample_id, scores = NULL,
+  evalue_cutoff = 0.98, use_corroborating = TRUE)
 }
 \arguments{
 \item{sample_assignments}{a sample level assignment data.frame from \code{read_smirfe_assignment}}
