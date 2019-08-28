@@ -13,25 +13,13 @@
 calculate_assignment_scores = function(single_sample, variable = "e_value",
                             weight = 1, calculation = "one_minus"){
   sample_assignments = single_sample$assignments
-  sample_assignments$peak_imf = paste0(sample_assignments$Sample_Peak, sample_assignments$complete_IMF, sample_assignments$adduct_IMF)
-  split_assignments = split(sample_assignments, sample_assignments$peak_imf)
 
-  score_them = function(peak_df, variable, weight, calculation){
-    variable_row = peak_df[peak_df$Type %in% variable, ]
-    value = as.numeric(variable_row$Assignment_Data[1])
-
-    score = switch(calculation,
-                   one_minus = (1 - value) * weight)
-    score_row = variable_row
-    score_row$Type = "score"
-    score_row$Assignment_Data = as.character(score)
-    rbind(peak_df, score_row)
-  }
-
-  score_assignments = purrr::map_df(split_assignments, score_them,
-                                    variable, weight, calculation)
-  score_assignments$peak_imf = NULL
-  single_sample$assignments = score_assignments
+  variable_data = dplyr::filter(sample_assignments, Type %in% variable)
+  variable_numeric = as.numeric(variable_data$Assignment_Data)
+  variable_data$score = switch(calculation,
+                               one_minus = (1 - variable_numeric) * weight)
+  variable_data = dplyr::select(variable_data, -Type, -Assignment_Data)
+  single_sample$scores = variable_data
   single_sample
 }
 
@@ -47,16 +35,14 @@ calculate_assignment_scores = function(single_sample, variable = "e_value",
 #' @return list
 #'
 #' @export
-get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
+get_sample_emfs = function(sample_assignments, sample_id, scores = NULL, evalue_cutoff = 0.98, use_corroborating = TRUE){
   log_memory()
-  if (!("score" %in% sample_assignments$Type)) {
-    stop("The data is missing the *score* Type, do you need to run `calculate_assignment_scores`?")
-  }
+
   #sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
   # add the adduct information into the EMF information
   sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
   e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
-  scores = dplyr::filter(sample_assignments, Type %in% "score") %>% dplyr::mutate(score = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
+  scores = dplyr::mutate(scores, imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
   evalue_clique_size = dplyr::left_join(e_values, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
   score_clique_size = dplyr::left_join(scores, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")

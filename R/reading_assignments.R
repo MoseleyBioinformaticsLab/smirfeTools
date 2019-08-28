@@ -161,6 +161,9 @@ extract_assigned_data <- function(assigned_data,
                                   use_scan_level = TRUE,
                                   progress = TRUE){
 
+  if (is.null(assigned_data[[1]]$scores)) {
+    stop("No 'scores' are available, do you need to run `calculate_assignment_scores`?")
+  }
   if (is.null(difference_cutoff)) {
     warning("difference_cutoff is NULL, no checking will be done on IMFs!")
 
@@ -192,7 +195,7 @@ extract_assigned_data <- function(assigned_data,
   names(assigned_data) = NULL
   within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
-    get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
+    get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = evalue_cutoff)
   })
 
   all_gemf_emf_mapping = internal_map$map_function(within_sample_emfs, function(x){
