@@ -33,7 +33,7 @@ find_confident_frequency_sd = function(assigned_data,
     low_e_peaks = dplyr::filter(assign_evalues, as.numeric(Assignment_Data) <= low_evalue_cutoff) %>% dplyr::pull(Sample_Peak)
 
     if (length(base::intersect(low_mz_peaks, low_e_peaks)) >= 20) {
-      return(get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = low_evalue_cutoff))
+      return(get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = low_evalue_cutoff))
     } else {
       return(NULL)
     }
