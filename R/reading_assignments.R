@@ -193,10 +193,17 @@ extract_assigned_data <- function(assigned_data,
   log_message("Generating EMF cliques from each sample ...")
 
   names(assigned_data) = NULL
-  within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
+
+  within_sample_emfs = purrr::map(assigned_data, function(.x){
+    progress_msg = paste0("Sample: ", .x$sample)
+    if (progress) {
+      message(progress_msg)
+    }
+    log_message(progress_msg)
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
     get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = evalue_cutoff)
   })
+
 
   all_gemf_emf_mapping = internal_map$map_function(within_sample_emfs, function(x){
     purrr::map2_dfr(x$grouped_emf, names(x$grouped_emf), function(.x, .y){
@@ -237,6 +244,10 @@ extract_assigned_data <- function(assigned_data,
   #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   # })
 
+  if (progress) {
+    message("Merging chosen EMFs ...")
+  }
+  log_message("Merging chosen EMFs ...")
   merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   # next is to actually extract the right data. But up to here, everything appears OK.
   #

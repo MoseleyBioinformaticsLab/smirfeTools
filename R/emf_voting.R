@@ -67,9 +67,10 @@ get_sample_emfs = function(sample_assignments, sample_id, scores = NULL, evalue_
   # that corresponds to the number of peaks in the clique,
   # filter to those EMF assignments that are below the filter,
   # and then extract the relevant data
-  grouped_emf_peaks = purrr::map(seq(grouped_emf), function(ige){
+  grouped_emf_peaks = internal_map$map_function(grouped_emf, function(x){
+    log_memory()
     #message(ige)
-    x = grouped_emf[[ige]]
+    #x = grouped_emf[[ige]]
     use_peaks = x$PeakID[1][[1]]
     peak_info = purrr::map(x$complete_EMF, ~ dplyr::filter(sample_assignments, PeakID %in% use_peaks, complete_EMF %in% .x))
     names(peak_info) = x$complete_EMF
