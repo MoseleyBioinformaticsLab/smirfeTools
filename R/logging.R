@@ -21,15 +21,15 @@ log_memory = function(){
     swapfree_to_swap = memory_numbers["SwapFree"] / memory_numbers["SwapTotal"]
 
     if ((active_to_total >= 0.95) || (swapfree_to_swap <= 0.95)) {
+      memory_string2 = paste0("HIGH MEMORY USAGE!!! ", memory_string)
       if (get("logger", envir = has_logger)) {
-        memory_string2 = paste0("HIGH MEMORY USAGE!!! ", memory_string)
-        logger::log_warn(memory_string2, namespace = "FTMS.peakCharacterization")
+        logger::log_warn(memory_string2, namespace = "smirfeTools")
       } else {
-        warning(memory_string)
+        warning(memory_string2)
       }
     } else {
       if (get("logger", envir = has_logger)) {
-        logger::log_info(memory_string, namespace = "FTMS.peakCharacterization")
+        logger::log_info(memory_string, namespace = "smirfeTools")
       }
     }
   }
