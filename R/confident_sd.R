@@ -22,7 +22,7 @@ find_confident_frequency_sd = function(assigned_data,
 
   sample_peak = purrr::map_df(assigned_data, ~ unique(.x$data[, c("Sample", "Sample_Peak")]))
 
-  confident_emfs = internal_map$map_function(seq(1, length(assigned_data)), function(in_assign){
+  confident_emfs = purrr::map(seq(1, length(assigned_data)), function(in_assign){
     .x = assigned_data[[in_assign]]
     #message(paste0(in_assign, "  ", .x$sample))
     peak_mz = dplyr::filter(.x$data, Measurement %in% "ObservedMZ")
