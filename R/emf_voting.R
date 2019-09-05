@@ -13,13 +13,9 @@
 calculate_assignment_scores = function(single_sample, variable = "e_value",
                             weight = 1, calculation = "one_minus"){
   sample_assignments = single_sample$assignments
-
-  variable_data = dplyr::filter(sample_assignments, Type %in% variable)
-  variable_numeric = as.numeric(variable_data$Assignment_Data)
-  variable_data$score = switch(calculation,
-                               one_minus = (1 - variable_numeric) * weight)
-  variable_data = dplyr::select(variable_data, -Type, -Assignment_Data)
-  single_sample$scores = variable_data
+  sample_assignments$score = switch(calculation,
+                                    one_minus = (1 - sample_assignments[[variable]]) * weight)
+  single_sample$assignments = sample_assignments
   single_sample
 }
 
