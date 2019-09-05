@@ -166,7 +166,7 @@ extract_assigned_data <- function(assigned_data,
                                   use_scan_level = TRUE,
                                   progress = TRUE){
 
-  if (is.null(assigned_data[[1]]$scores)) {
+  if (is.null(assigned_data[[1]]$assignments$score)) {
     stop("No 'scores' are available, do you need to run `calculate_assignment_scores`?")
   }
   if (is.null(difference_cutoff)) {
@@ -206,14 +206,12 @@ extract_assigned_data <- function(assigned_data,
     }
     log_message(progress_msg)
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
-    get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = evalue_cutoff)
+    get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
   })
 
 
   all_gemf_emf_mapping = internal_map$map_function(within_sample_emfs, function(x){
-    purrr::map2_dfr(x$grouped_emf, names(x$grouped_emf), function(.x, .y){
-      data.frame(grouped_emf = .y, complete_EMF = .x$complete_EMF, stringsAsFactors = FALSE)
-    })
+    purrr::map_df(x, ~ unique(dplyr::select(.x, grouped_EMF, complete_EMF)))
   })
 
   all_gemf_emf_mapping = do.call(rbind, all_gemf_emf_mapping)
@@ -225,14 +223,22 @@ extract_assigned_data <- function(assigned_data,
   log_memory()
   sudo_emf_list = create_sudo_emfs(all_gemf_emf_mapping)
   # next things:
-  all_gemfs = unlist(purrr::map(within_sample_emfs, "grouped_emf"), recursive = FALSE)
+  all_gemfs = unlist(within_sample_emfs, recursive = FALSE, use.names = FALSE)
+  names(all_gemfs) = purrr::map_chr(all_gemfs, ~ .x$grouped_EMF[1])
 
   if (progress) {
     message("Choosing EMFs by voting ...")
   }
   log_message("Choosing EMFs by voting ...")
 
-  peak_location = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% difference_measure))
+  get_measure = function(data, measure){
+    data %>% dplyr::select(.data[[measure]], Sample_Peak)
+  }
+  peak_location = purrr::map_df(assigned_data, function(in_data){
+    get_measure(in_data$data, difference_measure)
+  })
+  match_name = names(peak_location) %in% difference_measure
+  names(peak_location)[match_name] = "Value"
 
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)

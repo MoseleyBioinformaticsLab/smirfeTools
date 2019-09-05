@@ -93,9 +93,9 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   }
 
   all_assignments$gc = NULL
-
+  gemf_assignments = split(all_assignments, all_assignments$grouped_EMF)
   log_memory()
-  return(list(grouped_emf = all_assignments, multi_evidence = multi_evidence_emf))
+  return(gemf_assignments)
   # we should add the peaks to GEMF mapping here, so we can do what is noted on the last line.
 }
 
@@ -316,7 +316,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
   mean_location = dplyr::left_join(mean_location, peak_nap, by = c("imf" = "complete_IMF"))
   split_peaks_location = split_peaks_location[peak_nap$complete_IMF]
 
-  just_peaks = as.character(unknown_peaks$Peaks)
+  just_peaks = as.character(unknown_peaks$Sample_Peak)
   # this also needs to have the peaks sorted by their NAP, and match in order
   # of NAP. When the next one doesn't match, stop!
   match_location = purrr::map_df(just_peaks, function(test_peak){
@@ -326,31 +326,21 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 
     mean_diffs = dplyr::filter(mean_diffs, diff <= use_sd)
     if (nrow(mean_diffs) > 0) {
-      tmp_location = dplyr::slice(mean_diffs, which.min(diff))
-      match_imf = data.frame(complete_IMF = tmp_location$imf,
-                             PeakID = test_location$PeakID,
-                             Sample = test_location$Sample,
-                             Sample_Peak = test_peak,
-                             complete_EMF = imf_2_peak$complete_EMF[1],
-                             NAP = tmp_location$NAP,
-                             seq = tmp_location$seq,
-                             stringsAsFactors = FALSE)
+      min_diff = dplyr::slice(mean_diffs, which.min(diff))
+      match_imf = dplyr::filter(unknown_peaks, Sample_Peak %in% test_peak)
+      match_imf$complete_IMF = min_diff$imf
+      match_imf$complete_EMF = imf_2_peak$complete_EMF[1]
+      match_imf$NAP = min_diff$NAP
+      match_imf$seq = min_diff$seq
     } else {
-      match_imf = data.frame(complete_IMF = as.character(NA),
-                             PeakID = NA,
-                             Sample = as.character(NA),
-                             Sample_Peak = as.character(NA),
-                             complete_EMF = as.character(NA),
-                             NAP = as.double(NA),
-                             seq = as.integer(NA),
-                             stringsAsFactors = FALSE)
+      match_imf = dplyr::filter(unknown_peaks, Sample_Peak %in% test_peak)
+      match_imf$seq = NA
     }
     match_imf
   })
 
   match_location = match_location[!is.na(match_location$complete_IMF), ]
 
-  null_scores = data.frame(complete_EMF = imf_2_peak$complete_EMF[1], score = NA, stringsAsFactors = FALSE)
   if (nrow(match_location) > 0) {
     match_location = dplyr::arrange(match_location, seq)
     seq_match = all(match_location$seq == seq_len(nrow(match_location)))
@@ -358,21 +348,13 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 
     if (!(seq_match && unique_match)) {
       #print(match_location)
-      match_location = match_location[1,]
-      match_location[1, ] = NA
+      match_location = unknown_peaks
     }
   } else {
-    match_location = match_location[1,]
-    match_location[1, ] = NA
+    match_location = unknown_peaks
   }
 
-  out_scores = null_scores
-  out_scores$info = list(match_location)
-  out_scores$Sample_Peak = list(match_location$Sample_Peak)
-  out_scores$Sample = match_location$Sample[1]
-  out_scores$grouped_emf = as.character(unknown_peaks$grouped_emf[1])
-
-  out_scoress
+  match_location
 }
 
 
@@ -391,9 +373,10 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 #' @return data.frame
 #' @export
 choose_emf = function(grouped_emfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
-  grouped_scores = purrr::map_df(grouped_emfs, ~ .x$scores)
+  all_emf_info = purrr::map_df(grouped_emfs, ~ .x)
+  grouped_scores = unique(all_emf_info[, c("complete_EMF", "grouped_EMF", "voting_score", "type")])
 
-  use_peaks = unique(unlist(purrr::map(grouped_emfs, "Sample_Peak")))
+  use_peaks = dplyr::filter(all_emf_info, type %in% "primary") %>% dplyr::pull(Sample_Peak) %>% unique()
   use_location = dplyr::filter(peak_location, Sample_Peak %in% use_peaks)
 
   if (!is.null(scan_level_location)) {
@@ -414,51 +397,36 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
 
   # sum scores across the samples for each EMF, and keep those things that are
   # within X% of the highest sum
-  emf_votes = dplyr::group_by(grouped_scores, complete_EMF) %>% dplyr::summarise(sum_scores = sum(score)) %>%
+  emf_votes = dplyr::group_by(grouped_scores, complete_EMF) %>% dplyr::summarise(sum_scores = sum(voting_score)) %>%
     dplyr::mutate(max_ratio = sum_scores / max(sum_scores))
   keep_emf = dplyr::filter(emf_votes, max_ratio >= keep_ratio)
 
-  null_score = data.frame(complete_EMF = NA, score = NA, stringsAsFactors = FALSE)
-  gemf_emf = purrr::map2_dfr(grouped_emfs, names(grouped_emfs), function(.x, .y){
-    sample_from_grouped_emf = stringr::str_split_fixed(.y, "\\.", 2)[2]
-    scores = dplyr::filter(.x$score, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary") %>% dplyr::select(complete_EMF, score)
+  na_score = na_dataframe(all_emf_info)
 
-    if (nrow(scores) > 0) {
-      scores$info = vector(mode = "list", length = nrow(scores))
-      scores$Sample_Peak = vector(mode = "list", length = nrow(scores))
-      use_info = .x$peak_info[scores$complete_EMF]
-      scores$info = purrr::map(use_info, function(in_info){
-        in_info %>% dplyr::filter(Type %in% "NAP") %>% dplyr::mutate(NAP = as.numeric(Assignment_Data)) %>%
-          dplyr::select(complete_IMF, PeakID, Sample, Sample_Peak, complete_EMF, NAP) %>%
-          unique()
-      })
+  gemf_emf = purrr::map_df(grouped_emfs, function(.x){
+    match_emf = dplyr::filter(.x, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary")
 
-      scores$Sample_Peak = list(.x$Sample_Peak)
-      scores$Sample = as.character(sample_from_grouped_emf)
-      scores$grouped_emf = as.character(.y)
-    } else {
-      scores = null_score
-      scores$info = vector(mode = "list", length = nrow(scores))
-      scores$Sample_Peak = list(.x$Sample_Peak)
-      scores$Sample = as.character(sample_from_grouped_emf)
-      scores$grouped_emf = as.character(.y)
+    if (nrow(match_emf) == 0) {
+      match_emf = purrr::map_df(seq(1, length(unique(.x$Sample_Peak))), ~ na_score)
+      match_emf$Sample_Peak = unique(.x$Sample_Peak)
+      match_emf$grouped_EMF = .x$grouped_EMF[1]
     }
-    scores
+    match_emf
   })
-  na_scores = purrr::map_lgl(gemf_emf$scores, is.na)
+  na_match = purrr::map_lgl(gemf_emf$complete_EMF, is.na)
 
   # if (sum(na_evalues) > 0) {
   #   message("Found one!")
   # }
 
-  have_imf_peaks = unique(unlist(purrr::map(gemf_emf$Sample_Peak[!na_scores], ~ .x), use.names = FALSE))
+  have_imf_peaks = gemf_emf$Sample_Peak[!na_match]
 
-  if (sum(na_scores) > 0) {
-    trimmed_gemf_emf = gemf_emf[!na_scores, ]
-    missing_imf = purrr::map(which(na_scores), function(.x){
-      tmp_df = data.frame(Peaks = as.character(gemf_emf$Sample_Peak[[.x]]), Sample = gemf_emf$Sample[.x],
-                          grouped_emf = gemf_emf$grouped_emf[.x], stringsAsFactors = FALSE)
-      if (all(tmp_df$Peaks %in% have_imf_peaks)) {
+  if (sum(na_match) > 0) {
+    trimmed_gemf_emf = gemf_emf[!na_match, ]
+    missing_gemf = unique(gemf_emf$grouped_EMF[na_match])
+    missing_imf = purrr::map(missing_gemf, function(.x){
+      tmp_df = dplyr::filter(gemf_emf, grouped_EMF %in% .x)
+      if (all(tmp_df$Sample_Peak %in% have_imf_peaks)) {
         return(NULL)
       } else {
         return(tmp_df)
@@ -468,9 +436,7 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
     out_gemf_emf = trimmed_gemf_emf
     if (length(missing_imf) > 0) {
 
-      has_imf = unique(purrr::map_df(trimmed_gemf_emf$info, ~ .x))
-
-      imf_by_emf = split(has_imf, has_imf$complete_EMF)
+      imf_by_emf = split(trimmed_gemf_emf, trimmed_gemf_emf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
         match_imf_by_difference(x[[1]], x[[2]], use_scans, use_location, use_difference_cutoff)
@@ -506,9 +472,7 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
 }
 
 check_emf = function(in_emf, peak_location, difference_cutoff){
-  emf_info = purrr::map_df(in_emf$info, ~ .x)
-
-  peaks_by_imf = split(emf_info$Sample_Peak, emf_info$complete_IMF)
+  peaks_by_imf = split(in_emf$Sample_Peak, in_emf$complete_IMF)
 
   keep_peaks_by_imf = purrr::map(peaks_by_imf, function(in_peaks){
     in_frequencies = dplyr::filter(peak_location, Sample_Peak %in% in_peaks)
@@ -526,7 +490,7 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
 
   all_keep = unique(unlist(keep_peaks_by_imf))
 
-  info_by_sample = split(emf_info, emf_info$Sample) %>%
+  info_by_sample = split(in_emf, in_emf$Sample) %>%
     purrr::map_df(., function(in_sample){
       in_sample = in_sample[order(in_sample$NAP, decreasing = TRUE), ]
       in_sample$order = seq(1, nrow(in_sample))
@@ -549,16 +513,7 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
       in_sample
     })
 
-  in_emf$info = purrr::map(in_emf$info, function(in_info){
-    dplyr::filter(in_info, Sample_Peak %in% info_by_sample$Sample_Peak)
-  })
-  in_emf$Sample_Peak = purrr::map(in_emf$Sample_Peak, function(in_peaks){
-    base::intersect(in_peaks, info_by_sample$Sample_Peak)
-  })
-
-  nonzero_rows = purrr::map_lgl(in_emf$info, ~ nrow(.x) > 0)
-  in_emf = in_emf[nonzero_rows, ]
-  in_emf
+  info_by_sample
 }
 
 #' remove duplicate peaks across sudo EMFs
