@@ -35,165 +35,71 @@ calculate_assignment_scores = function(single_sample, variable = "e_value",
 #' @return list
 #'
 #' @export
-get_sample_emfs = function(sample_assignments, sample_id, scores = NULL, evalue_cutoff = 0.98, use_corroborating = TRUE){
+get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
   log_memory()
 
-  #sample_assignments = dplyr::filter(sample_assignments, !grepl("S", complete_EMF))
-  # add the adduct information into the EMF information
-  sample_assignments = dplyr::mutate(sample_assignments, emf_Adduct = paste0(complete_EMF, ".", adduct_IMF))
-  e_values = dplyr::filter(sample_assignments, Type %in% "e_value") %>% dplyr::mutate(e_value = as.numeric(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
-  scores = dplyr::mutate(scores, imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
-  clique_size = dplyr::filter(sample_assignments, Type %in% "clique_size") %>% dplyr::mutate(clique_size = as.integer(Assignment_Data), imf_peak = paste0(complete_IMF, "_", adduct_IMF, "_", PeakID))
-  evalue_clique_size = dplyr::left_join(e_values, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
-  score_clique_size = dplyr::left_join(scores, clique_size[, c("imf_peak", "clique_size")], by = "imf_peak")
-
-
-  # split the peaks by which EMF they were assigned to, and then for each
-  # EMF spit out the set of peaks that were assigned that EMF, both in an
-  # easy to compare character form, and the actual list
-  peaks_by_emf = split(sample_assignments$PeakID, sample_assignments$complete_EMF) %>%
-    purrr::map2_dfr(., names(.), function(.x, .y){
-      peaks = unique(.x)
-      tmp_frame = data.frame(complete_EMF = .y, PeakID_chr = paste(peaks, collapse = ","), stringsAsFactors = FALSE)
-      tmp_frame$PeakID = list(peaks)
-      tmp_frame
-    })
-
-  # now we can easily find those EMFs that share the same set of peaks to create
-  # `grouped_EMFs`
-  grouped_emf = split(peaks_by_emf, peaks_by_emf$PeakID_chr)
-
-  # for each grouped_EMF, get out the peak info, the e-value
-  # that corresponds to the number of peaks in the clique,
-  # filter to those EMF assignments that are below the filter,
-  # and then extract the relevant data
-  grouped_emf_peaks = internal_map$map_function(grouped_emf, function(x){
-    log_memory()
-    #message(ige)
-    #x = grouped_emf[[ige]]
-    use_peaks = x$PeakID[1][[1]]
-    peak_info = purrr::map(x$complete_EMF, ~ dplyr::filter(sample_assignments, PeakID %in% use_peaks, complete_EMF %in% .x))
-    names(peak_info) = x$complete_EMF
-
-    # the true e-value is the one that corresponds to the actual clique size, or what should be the maximum of the clique size
-    grouped_evalues = purrr::map_dbl(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(e_value))
-    grouped_scores = purrr::map_dbl(x$complete_EMF, ~ dplyr::filter(score_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(score))
-    grouped_clique_size = purrr::map_int(x$complete_EMF, ~ dplyr::filter(evalue_clique_size, PeakID %in% use_peaks, complete_EMF %in% .x) %>% dplyr::slice(which.max(clique_size)) %>% dplyr::pull(clique_size))
-
-    keep_emf = grouped_evalues <= evalue_cutoff
-    x = x[keep_emf, ]
-    if (sum(keep_emf) > 0) {
-      return(list(complete_EMF = x$complete_EMF,
-                  peak_info = peak_info[keep_emf],
-                  e_values = dplyr::mutate(x, e_value = grouped_evalues[keep_emf], Sample = sample_id, complete_EMF = complete_EMF, type = "primary"),
-                  scores = dplyr::mutate(x, score = grouped_scores[keep_emf], Sample = sample_id, complete_EMF = complete_EMF, type = "primary"),
-                  min_e_value = min(grouped_evalues[keep_emf]),
-                  max_score = max(grouped_scores[keep_emf]),
-                  clique_size = grouped_clique_size[1],
-                  PeakID = use_peaks,
-                  Sample_Peak = paste0(peak_info[[1]]$Sample[1], "_", use_peaks)
-      ))
-    } else {
-      return(NULL)
-    }
-
-  })
-
-  # our initial list might have null's because they don't have any EMF assignments
-  # with e-values below the cutoff
-  gep_null = purrr::map_lgl(grouped_emf_peaks, is.null)
-  grouped_emf_peaks = grouped_emf_peaks[!gep_null]
-  names(grouped_emf_peaks) = paste0("GEMF_", seq_along(grouped_emf_peaks), ".", sample_id)
-
-  # now we can use the isotopologue_EMF to find those things that have multiple adducts
-  # to the same EMF, and then check if there is actually multiple evidences
-  emf_by_emf = purrr::map_df(grouped_emf_peaks, function(x){
-    purrr::map_dfr(x$peak_info, ~ data.frame(complete_EMF = .x$complete_EMF[1],
-                                             adduct_IMF = .x$adduct_IMF[1],
-                                             isotopologue_EMF = unique(dplyr::filter(.x, Type %in% "isotopologue_EMF") %>% dplyr::pull(Assignment_Data)), stringsAsFactors = FALSE))
-  }) %>% split(., .$isotopologue_EMF)
-
-  # can only have multiple evidences if there are multiple rows from above,
-  # and H vs NH4 don't count as multiple evidence. This actually goes through
-  # to find those instances
-  n_adduct = purrr::map_dbl(emf_by_emf, nrow)
-  emf_by_emf = emf_by_emf[n_adduct > 1]
-  multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
-    out_data = NULL
-    if (length(unique(x$adduct_IMF)) > 1) {
-      #emf_adducts = stringr::str_split_fixed(x$emf_Adduct, "\\.", 2)
-
-      if (sum(x$adduct_IMF %in% c("1H1", "14N1,1H4")) != length(x$adduct_IMF)) {
-        out_data = x
-        out_data
-      }
-    }
-    out_data
-  })
+  sample_assignments = dplyr::filter(sample_assignments, e_value <= evalue_cutoff)
+  sample_assignments = sample_assignments[order(sample_assignments$complete_EMF), ]
+  grouped_emf = dplyr::group_by(sample_assignments, complete_EMF)
+  grouped_peaks = dplyr::summarise(grouped_emf, PeakID_chr = paste(unique(PeakID), collapse = ","), PeakID2 = list(unique(PeakID)))
+  peak_2_emf = data.frame(PeakID_chr = unique(grouped_peaks$PeakID_chr), stringsAsFactors = FALSE)
+  peak_2_emf$grouped_EMF = paste0("GEMF_", seq(1, nrow(peak_2_emf)), ".", sample_id)
+  grouped_peaks = dplyr::left_join(grouped_peaks, peak_2_emf, by = "PeakID_chr")
+  sample_assignments = dplyr::left_join(sample_assignments, grouped_peaks, by = "complete_EMF")
+  sample_assignments$gc = paste0(sample_assignments$grouped_EMF, sample_assignments$complete_EMF)
+  grouped_assignments = dplyr::group_by(sample_assignments, grouped_EMF, complete_EMF)
+  grouped_scores = dplyr::summarise(grouped_assignments, gc = gc[1], voting_score = score[which.max(clique_size)[1]],
+                                    type = "primary")
+  sample_assignments = dplyr::left_join(sample_assignments, grouped_scores[, c("gc", "voting_score", "type")], by = "gc")
 
   if (use_corroborating) {
-    # extract the e-values for each one
-    all_evalues = purrr::map_df(grouped_emf_peaks, ~ .x$e_values)
-    all_scores = purrr::map_df(grouped_emf_peaks, ~ .x$scores)
+    emf_by_emf = unique(dplyr::select(sample_assignments, complete_EMF, adduct_IMF, isotopologue_EMF, grouped_EMF))
+    emf_by_emf = split(emf_by_emf, emf_by_emf$isotopologue_EMF)
 
-    gep_2_complete_emf = purrr::map2_dfr(grouped_emf_peaks, names(grouped_emf_peaks),
-                                         function(.x, .y){
-                                           #message(.y)
-                                           data.frame(gep = .y, complete_EMF = .x$e_values$complete_EMF,
-                                                      stringsAsFactors = FALSE)
-                                         })
-    gep_2_complete_emf = dplyr::filter(gep_2_complete_emf, complete_EMF %in% multi_evidence_emf$complete_EMF)
-    unique_gep = unique(gep_2_complete_emf$gep)
-    has_multi_evidence = which(names(grouped_emf_peaks) %in% unique_gep)
+    # can only have multiple evidences if there are multiple rows from above,
+    # and H vs NH4 don't count as multiple evidence. This actually goes through
+    # to find those instances
+    n_adduct = purrr::map_dbl(emf_by_emf, nrow)
+    emf_by_emf = emf_by_emf[n_adduct > 1]
+    multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
+      out_data = NULL
+      if (length(unique(x$adduct_IMF)) > 1) {
+        #emf_adducts = stringr::str_split_fixed(x$emf_Adduct, "\\.", 2)
 
-    # add in the e-values and scores, with the note that they are from "corroborating" evidence,
-    # so the actual assignments can be filtered out at the voting step.
-    grouped_emf_peaks = purrr::map_at(grouped_emf_peaks, has_multi_evidence, function(gep){
-      curr_evalues = gep$e_values
-
-      multi_evalues = purrr::map_df(seq_len(nrow(curr_evalues)), function(curr_row){
-        base_data = curr_evalues[curr_row, ]
-
-        use_iso_emf = dplyr::filter(multi_evidence_emf, complete_EMF %in% base_data$complete_EMF) %>%
-          dplyr::pull(isotopologue_EMF)
-        emf_matches = dplyr::filter(multi_evidence_emf, !(complete_EMF %in% base_data$complete_EMF), isotopologue_EMF %in% use_iso_emf) %>%
-          dplyr::pull(complete_EMF)
-
-        if (length(emf_matches) > 0) {
-          other_data = dplyr::filter(all_evalues, complete_EMF %in% emf_matches) %>%
-            dplyr::mutate(complete_EMF = base_data$complete_EMF, type = "corroborating")
-          base_data = rbind(base_data, other_data)
+        if (sum(x$adduct_IMF %in% c("1H1", "14N1,1H4")) != length(x$adduct_IMF)) {
+          out_data = x
+          out_data
         }
-        base_data
-      })
-
-      gep$e_values = multi_evalues
-
-      curr_scores = gep$scores
-      multi_scores = purrr::map_df(seq_len(nrow(curr_scores)), function(curr_row){
-        base_data = curr_scores[curr_row, ]
-
-        use_iso_emf = dplyr::filter(multi_evidence_emf, complete_EMF %in% base_data$complete_EMF) %>%
-          dplyr::pull(isotopologue_EMF)
-        emf_matches = dplyr::filter(multi_evidence_emf, !(complete_EMF %in% base_data$complete_EMF), isotopologue_EMF %in% use_iso_emf) %>%
-          dplyr::pull(complete_EMF)
-
-        if (length(emf_matches) > 0) {
-          other_data = dplyr::filter(all_scores, complete_EMF %in% emf_matches) %>%
-            dplyr::mutate(complete_EMF = base_data$complete_EMF, type = "corroborating")
-          base_data = rbind(base_data, other_data)
-        }
-        base_data
-      })
-      gep$scores = multi_scores
-
-      gep
-
+      }
+      out_data
     })
+
+    split_multi = split(multi_evidence_emf, multi_evidence_emf$isotopologue_EMF)
+    corroborating_evidence = internal_map$map_function(seq(1, length(split_multi)), function(in_split){
+      message(in_split)
+      in_multi = split_multi[[in_split]]
+      gemf_evidence = purrr::map_df(seq(1, nrow(in_multi)), function(m_row){
+        other_data = in_multi[-m_row, , drop = FALSE]
+        other_evidence = dplyr::filter(sample_assignments, isotopologue_EMF %in% other_data$isotopologue_EMF,
+                                       grouped_EMF %in% other_data$grouped_EMF)
+        evidence_2 = group_by(other_evidence, gc) %>% slice(1) %>% ungroup()
+        evidence_2$grouped_EMF = in_multi$grouped_EMF[m_row]
+        evidence_2$complete_EMF = in_multi$complete_EMF[m_row]
+        evidence_2$type = "secondary"
+        evidence_2
+      })
+      gemf_evidence
+    })
+    corroborating_assignments = do.call(rbind, corroborating_evidence)
+    all_assignments = rbind(sample_assignments, corroborating_assignments)
+  } else {
+    all_assignments = sample_assignments
   }
 
+  all_assignments$gc = NULL
+
   log_memory()
-  return(list(grouped_emf = grouped_emf_peaks, multi_evidence = multi_evidence_emf))
+  return(list(grouped_emf = all_assignments, multi_evidence = multi_evidence_emf))
   # we should add the peaks to GEMF mapping here, so we can do what is noted on the last line.
 }
 

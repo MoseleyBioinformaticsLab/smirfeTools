@@ -33,8 +33,13 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   peak_info <- internal_map$map_function(tmp_list$Peaks[to_extract], extract_peak_data)
 
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
+  peak_data <- tidyr::spread(peak_data, Measurement, Value)
 
   peak_assignments <- purrr::map_dfr(peak_info, "assignment")
+  peak_assignments <- tidyr::spread(peak_assignments, Type, Assignment_Data)
+  numeric_assignments <- peak_assignments
+  numeric_assignments <- purrr::map_at(numeric_assignments, c("clique_size", "e_value", "lbl.count", "mass_error", "NAP"), as.numeric)
+  peak_assignments = as.data.frame(numeric_assignments, stringsAsFactors = FALSE)
 
   peak_data$Sample <- sample
   peak_data$Sample_Peak <- paste0(sample, "_", peak_data$PeakID)
