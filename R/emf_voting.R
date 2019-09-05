@@ -439,6 +439,7 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
       imf_by_emf = split(trimmed_gemf_emf, trimmed_gemf_emf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
+        message(x[[2]]$grouped_EMF[1])
         "!DEBUG `x[[2]]$grouped_EMF[1]`"
         match_imf_by_difference(x[[1]], x[[2]], use_scans, use_location, use_difference_cutoff)
       })
