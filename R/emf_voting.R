@@ -72,7 +72,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
 
     split_multi = split(multi_evidence_emf, multi_evidence_emf$isotopologue_EMF)
     corroborating_evidence = internal_map$map_function(seq(1, length(split_multi)), function(in_split){
-      message(in_split)
+      #message(in_split)
       in_multi = split_multi[[in_split]]
       gemf_evidence = purrr::map_df(seq(1, nrow(in_multi)), function(m_row){
         other_data = in_multi[-m_row, , drop = FALSE]
