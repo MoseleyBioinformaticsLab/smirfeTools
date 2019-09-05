@@ -113,29 +113,29 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
 #' @return list
 #' @export
 create_sudo_emfs = function(gemf_2_emf){
-  sudo_emf_list = vector("list", length(unique(gemf_2_emf$grouped_emf)))
+  sudo_emf_list = vector("list", length(unique(gemf_2_emf$grouped_EMF)))
 
   i_sudo = 1
   while (nrow(gemf_2_emf) > 0) {
     #message(i_sudo)
     tmp_emf_mapping = dplyr::filter(gemf_2_emf, complete_EMF %in% gemf_2_emf$complete_EMF[1])
 
-    emf_iter = dplyr::left_join(tmp_emf_mapping, gemf_2_emf, by = "grouped_emf") %>%
-      dplyr::transmute(grouped_emf = grouped_emf, complete_EMF = complete_EMF.y) %>% unique()
+    emf_iter = dplyr::left_join(tmp_emf_mapping, gemf_2_emf, by = "grouped_EMF") %>%
+      dplyr::transmute(grouped_EMF = grouped_EMF, complete_EMF = complete_EMF.y) %>% unique()
 
     adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "complete_EMF") %>%
-      dplyr::transmute(grouped_emf = grouped_emf.y, complete_EMF = complete_EMF) %>% unique()
+      dplyr::transmute(grouped_EMF = grouped_EMF.y, complete_EMF = complete_EMF) %>% unique()
 
     while (nrow(adduct_iter) != nrow(emf_iter)) {
-      emf_iter = dplyr::left_join(adduct_iter, gemf_2_emf, by = "grouped_emf") %>%
-        dplyr::transmute(grouped_emf = grouped_emf, complete_EMF = complete_EMF.y) %>% unique()
+      emf_iter = dplyr::left_join(adduct_iter, gemf_2_emf, by = "grouped_EMF") %>%
+        dplyr::transmute(grouped_EMF = grouped_EMF, complete_EMF = complete_EMF.y) %>% unique()
 
       adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "complete_EMF") %>%
-        dplyr::transmute(grouped_emf = grouped_emf.y, complete_EMF = complete_EMF) %>% unique()
+        dplyr::transmute(grouped_EMF = grouped_EMF.y, complete_EMF = complete_EMF) %>% unique()
     }
 
     sudo_emf_list[[i_sudo]] = adduct_iter
-    gemf_2_emf = dplyr::filter(gemf_2_emf, !(grouped_emf %in% adduct_iter$grouped_emf))
+    gemf_2_emf = dplyr::filter(gemf_2_emf, !(grouped_EMF %in% adduct_iter$grouped_EMF))
     i_sudo = i_sudo + 1
   }
 
