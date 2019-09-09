@@ -25,12 +25,10 @@ find_confident_frequency_sd = function(assigned_data,
   confident_emfs = purrr::map(seq(1, length(assigned_data)), function(in_assign){
     .x = assigned_data[[in_assign]]
     #message(paste0(in_assign, "  ", .x$sample))
-    peak_mz = dplyr::filter(.x$data, Measurement %in% "ObservedMZ")
-    low_mz_peaks = dplyr::filter(peak_mz, Value <= low_mz_cutoff) %>% dplyr::pull(Sample_Peak)
+    low_mz_peaks = dplyr::filter(.x$data, ObservedMZ <= low_mz_cutoff) %>% dplyr::pull(Sample_Peak)
 
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
-    assign_evalues = dplyr::filter(tmp_assign, Type %in% "e_value")
-    low_e_peaks = dplyr::filter(assign_evalues, as.numeric(Assignment_Data) <= low_evalue_cutoff) %>% dplyr::pull(Sample_Peak)
+    low_e_peaks = dplyr::filter(tmp_assign, e_value <= low_evalue_cutoff) %>% dplyr::pull(Sample_Peak)
 
     if (length(base::intersect(low_mz_peaks, low_e_peaks)) >= 20) {
       return(get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = low_evalue_cutoff))
@@ -42,9 +40,7 @@ find_confident_frequency_sd = function(assigned_data,
 
   confident_emfs = confident_emfs[!purrr::map_lgl(confident_emfs, is.null)]
   confident_gemf_emf_mapping = internal_map$map_function(confident_emfs, function(x){
-    purrr::map2_dfr(x$grouped_emf, names(x$grouped_emf), function(.x, .y){
-      data.frame(grouped_emf = .y, complete_EMF = .x$complete_EMF, stringsAsFactors = FALSE)
-    })
+    purrr::map_df(x, ~ unique(dplyr::select(.x, grouped_EMF, complete_EMF)))
   })
   confident_gemf_emf_mapping = do.call(rbind, confident_gemf_emf_mapping)
 
@@ -52,7 +48,8 @@ find_confident_frequency_sd = function(assigned_data,
 
   n_emf_confident = purrr::map_int(confident_sudo_emfs, ~length(unique(.x$grouped_emf)))
   confident_sudo_emfs = confident_sudo_emfs[n_emf_confident > 1]
-  confident_all_gemfs = unlist(purrr::map(confident_emfs, "grouped_emf"), recursive = FALSE)
+  confident_all_gemfs = unlist(confident_emfs, recursive = FALSE, use.names = FALSE)
+  names(confident_all_gemfs) = purrr::map_chr(confident_all_gemfs, .x$grouped_EMF[1])
 
   sd_information = internal_map$map_function(confident_sudo_emfs, function(in_sudo){
     calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_emf)], scan_level_frequency, sample_peak)
