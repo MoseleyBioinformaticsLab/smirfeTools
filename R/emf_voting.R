@@ -141,7 +141,7 @@ create_sudo_emfs = function(gemf_2_emf){
 
   keep_sudo = purrr::map_lgl(sudo_emf_list, ~ !is.null(.x))
   sudo_emf_list = sudo_emf_list[keep_sudo]
-  names(sudo_emf_list) = paste0("SEMF.", seq(1, length(sudo_emf_list)))
+  names(sudo_emf_list) = paste0("SEMF_", seq(1, length(sudo_emf_list)))
   sudo_emf_list
 
 }

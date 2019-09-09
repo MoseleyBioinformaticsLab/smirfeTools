@@ -46,13 +46,13 @@ find_confident_frequency_sd = function(assigned_data,
 
   confident_sudo_emfs = create_sudo_emfs(confident_gemf_emf_mapping)
 
-  n_emf_confident = purrr::map_int(confident_sudo_emfs, ~length(unique(.x$grouped_emf)))
+  n_emf_confident = purrr::map_int(confident_sudo_emfs, ~length(unique(.x$grouped_EMF)))
   confident_sudo_emfs = confident_sudo_emfs[n_emf_confident > 1]
   confident_all_gemfs = unlist(confident_emfs, recursive = FALSE, use.names = FALSE)
-  names(confident_all_gemfs) = purrr::map_chr(confident_all_gemfs, .x$grouped_EMF[1])
+  names(confident_all_gemfs) = purrr::map_chr(confident_all_gemfs, ~ .x$grouped_EMF[1])
 
   sd_information = internal_map$map_function(confident_sudo_emfs, function(in_sudo){
-    calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_emf)], scan_level_frequency, sample_peak)
+    calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
   })
 
   sd_df = purrr::imap_dfr(sd_information, function(.x, .y){
