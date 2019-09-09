@@ -241,9 +241,9 @@ extract_assigned_data <- function(assigned_data,
   names(peak_location)[match_name] = "Value"
 
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   })
-
+  names(chosen_emfs) = names(sudo_emf_list)
   null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
   chosen_emfs = chosen_emfs[!null_chosen]
 
@@ -252,8 +252,9 @@ extract_assigned_data <- function(assigned_data,
   # debugging version
   # chosen_emfs = purrr::map(seq_along(sudo_emf_list), function(.x){
   #   message(.x)
-  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_emf)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
+  #   choose_emf(all_gemfs[unique(sudo_emf_list[[.x]]$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
   # })
+
 
   if (progress) {
     message("Merging chosen EMFs ...")
@@ -264,6 +265,11 @@ extract_assigned_data <- function(assigned_data,
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
   merged_chosen_emfs = merged_chosen_emfs[!null_chosen2]
+  merged_chosen_emfs = purrr::imap(merged_chosen_emfs, function(.x, .y){
+    .x$sudo_EMF = .y
+    rownames(.x) = NULL
+    .x
+  })
 
   n_merged = length(merged_chosen_emfs)
   log_memory()
@@ -273,65 +279,14 @@ extract_assigned_data <- function(assigned_data,
   log_message("Extracting EMF matrices ...")
   extracted_emfs = extract_emfs(merged_chosen_emfs)
 
-  peak_height = purrr::map_df(assigned_data, function(in_assign){
-    tmp_data = in_assign$data %>% dplyr::filter(Measurement %in% "Height") %>%
-      dplyr::mutate(Sample_Peak = paste0(Sample, "_", PeakID), Height = Value) %>%
-      dplyr::select(Sample_Peak, Height)
-  })
-  peak_height = rbind(peak_height, data.frame(Sample_Peak = "0", Height = NA, stringsAsFactors = FALSE))
+  all_peaks = purrr::map_df(merged_chosen_emfs, ~ unique(dplyr::select(.x, Sample, Sample_Peak)))
+  peak_data = purrr::map_df(assigned_data, ~ .x$data)
+  peak_data = dplyr::filter(peak_data, Sample_Peak %in% all_peaks$Sample_Peak)
 
-  peak_height_matrix = matrix(peak_height$Height, nrow = nrow(peak_height), ncol = 1)
-  rownames(peak_height_matrix) = peak_height$Sample_Peak
+  extracted_location_intensity = add_location_intensity(extracted_emfs, peak_data,
+                                                        ObservedMZ, Height)
 
-  peak_mz = purrr::map_df(assigned_data, ~ dplyr::filter(.x$data, Measurement %in% observed_mz))
-  peak_mz = rbind(peak_mz, data.frame(PeakID = "0", Measurement = "ObservedMZ",
-                                      Value = NA, Sample = "0", Sample_Peak = "0",
-                                      stringsAsFactors = FALSE))
-  peak_mz_matrix = matrix(peak_mz$Value, nrow = nrow(peak_mz), ncol = 1)
-  rownames(peak_mz_matrix) = peak_mz$Sample_Peak
-
-  all_samples = colnames(extracted_emfs[[1]][[1]]$peak_matrix)
-  numeric_matrix = matrix(NA, nrow = 1, ncol = length(all_samples))
-  colnames(numeric_matrix) = all_samples
-  extracted_emfs_height_mz = internal_map$map_function(extracted_emfs, function(in_emf){
-    purrr::map(in_emf, function(group_emf){
-      tmp_height = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
-        tmp_data = numeric_matrix
-        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
-        tmp_peaks[is.na(tmp_peaks)] = "0"
-        tmp_data[1, ] = peak_height_matrix[tmp_peaks, 1]
-
-      })
-      out_height = do.call(rbind, tmp_height)
-      colnames(out_height) = all_samples
-      group_emf$height = out_height
-
-      tmp_mz = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
-        tmp_data = numeric_matrix
-        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
-        tmp_peaks[is.na(tmp_peaks)] = "0"
-        tmp_data[1, ] = peak_mz_matrix[tmp_peaks, 1]
-
-      })
-      out_mz = do.call(rbind, tmp_mz)
-      colnames(out_mz) = all_samples
-      group_emf$mz = out_mz
-
-      group_emf
-    })
-  })
-
-  all_assignments <- purrr::map_df(assigned_data, "assignments") %>%
-    dplyr::filter(Type %in% c("isotopologue_EMF", "isotopologue_IMF")) %>%
-    tidyr::spread(Type, Assignment_Data) %>%
-    dplyr::select(adduct_IMF, complete_EMF, complete_IMF, isotopologue_EMF, isotopologue_IMF) %>%
-    unique()
-
-  all_emfs = purrr::map_df(extracted_emfs_height_mz, function(in_emf){
-    purrr::map_df(in_emf, ~ .x$peak_info)
-  })
-
-  all_assignments = dplyr::filter(all_assignments, complete_EMF %in% unique(all_emfs$complete_EMF))
+  all_assignments = purrr::map_df(merged_chosen_emfs, ~ .x)
 
   stop_time = Sys.time()
   diff_time = difftime(stop_time, start_time)
@@ -340,7 +295,7 @@ extract_assigned_data <- function(assigned_data,
     message(time_message)
   }
   log_message(time_message)
-  return(list(emfs = extracted_emfs_height_mz,
+  return(list(emfs = extracted_location_intensity,
               emf_info = all_assignments,
               tic = get_tic(assigned_data),
               n_emfs = list(chosen = n_chosen,
