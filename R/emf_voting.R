@@ -746,6 +746,70 @@ extract_emfs = function(chosen_emfs){
   all_emfs
 }
 
+#' add peak location and intensity
+#'
+#' Given a set of EMF peak matrices and a data.frame of various locations and
+#' intensities, associates a matrix of each of location and intensity directly
+#' to the EMF peak matrix. Can be used to extract alternatives to the default
+#' of Height and ObservedMZ.
+#'
+#' @param emfs list of EMFs
+#' @param peak_data data.frame of peak data
+#' @param location which variable to use for location (unquoted)
+#' @param intensity which variable to use for intensity (unquoted)
+#'
+#' @export
+#' @return list
+add_location_intensity = function(emfs, peak_data, location = ObservedMZ,
+                                  intensity = Height){
+
+  peak_data = dplyr::mutate(peak_data, location = {{location}}, intensity = {{intensity}})
+  peak_location = dplyr::select(peak_data, Sample_Peak, location)
+  peak_intensity = dplyr::select(peak_data, Sample_Peak, intensity)
+
+  peak_intensity = rbind(peak_intensity, data.frame(Sample_Peak = "0", intensity = NA, stringsAsFactors = FALSE))
+
+  peak_intensity_matrix = matrix(peak_intensity$intensity, nrow = nrow(peak_intensity), ncol = 1)
+  rownames(peak_intensity_matrix) = peak_intensity$Sample_Peak
+
+  peak_location = rbind(peak_location, data.frame(Sample_Peak = "0", location = NA,
+                                      stringsAsFactors = FALSE))
+  peak_location_matrix = matrix(peak_location$location, nrow = nrow(peak_location), ncol = 1)
+  rownames(peak_location_matrix) = peak_location$Sample_Peak
+
+  all_samples = colnames(emfs[[1]][[1]]$peak_matrix)
+  numeric_matrix = matrix(NA, nrow = 1, ncol = length(all_samples))
+  colnames(numeric_matrix) = all_samples
+  emfs_2 = internal_map$map_function(emfs, function(in_emf){
+    purrr::map(in_emf, function(group_emf){
+      tmp_intensity = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
+        tmp_data = numeric_matrix
+        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
+        tmp_peaks[is.na(tmp_peaks)] = "0"
+        tmp_data[1, ] = peak_intensity_matrix[tmp_peaks, 1]
+
+      })
+      out_intensity = do.call(rbind, tmp_intensity)
+      colnames(out_intensity) = all_samples
+      group_emf$intensity = out_intensity
+
+      tmp_location = purrr::map(seq(1, nrow(group_emf$corresponded_matrix)), function(in_row){
+        tmp_data = numeric_matrix
+        tmp_peaks = group_emf$corresponded_matrix[in_row, ]
+        tmp_peaks[is.na(tmp_peaks)] = "0"
+        tmp_data[1, ] = peak_location_matrix[tmp_peaks, 1]
+
+      })
+      out_location = do.call(rbind, tmp_location)
+      colnames(out_location) = all_samples
+      group_emf$location = out_location
+
+      group_emf
+    })
+  })
+
+}
+
 #' extract IMF or EMF level data
 #'
 #' Extract either IMF or EMF level data from the extracted EMFs. Which is controlled by the `by` argument.
@@ -756,44 +820,44 @@ extract_emfs = function(chosen_emfs){
 #' @details For `EMF`, will be a list corresponding to each EMF from the sudo EMFs, for `IMF`, will be
 #'  matrices and a data.frame.
 #'
-#' @return list with `height`, `mz`, and `info`
+#' @return list with `intensity`, `location`, and `info`
 #' @export
 #'
 extract_imf_emf_data = function(emfs, by = "EMF"){
   all_compared = internal_map$map_function(emfs, compare_extract_emfs, by = by)
 
   if (is.null(names(all_compared))) {
-    names(all_compared) = paste0("SEMF.", seq_along(all_compared))
+    names(all_compared) = paste0("SEMF_", seq_along(all_compared))
   }
 
   if ("EMF" %in% by) {
-    all_height = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
-      semf_height = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
-        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
-        out_height = in_emf$height
-        rownames(out_height) = peak_id
-        out_height
+    all_intensity = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_intensity = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
+        out_intensity = in_emf$intensity
+        rownames(out_intensity) = peak_id
+        out_intensity
       })
-      names(semf_height) = paste0(semf_id, "_", names(in_semf))
-      semf_height
+      names(semf_intensity) = paste0(semf_id, ".", names(in_semf))
+      semf_intensity
 
     }) %>% purrr::flatten()
 
-    all_mz = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
-      semf_mz = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
-        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
-        out_mz = in_emf$mz
-        rownames(out_mz) = peak_id
-        out_mz
+    all_location = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_location = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
+        out_location = in_emf$location
+        rownames(out_location) = peak_id
+        out_location
       })
-      names(semf_mz) = paste0(semf_id, "_", names(in_semf))
-      semf_mz
+      names(semf_location) = paste0(semf_id, ".", names(in_semf))
+      semf_location
 
     }) %>% purrr::flatten()
 
     all_info = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
       semf_info = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
-        peak_id = paste0(semf_id, "_", emf_id, "_", names(in_emf$info))
+        peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
         info_df = purrr::map2_dfr(in_emf$info, peak_id, function(in_info, pid){
           in_info$PeakID = pid
           in_info$sudo_EMF = semf_id
@@ -801,27 +865,27 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
           in_info
         })
       })
-      names(semf_info) = paste0(semf_id, "_", names(in_semf))
+      names(semf_info) = paste0(semf_id, ".", names(in_semf))
       semf_info
     }) %>% purrr::flatten()
 
   } else {
-    all_height = purrr::map2(all_compared, names(all_compared), function(.x, .y){
-      peak_id = paste0(.y,"_", names(.x$info))
-      out_height = .x$height
-      n_height = nrow(out_height)
+    all_intensity = purrr::map2(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y,".", names(.x$info))
+      out_intensity = .x$intensity
+      n_intensity = nrow(out_intensity)
       #message(paste0(.y, " ", n_height))
-      rownames(out_height) = peak_id
-      out_height
+      rownames(out_intensity) = peak_id
+      out_intensity
     }) %>% do.call(rbind, .)
-    all_mz = purrr::map2(all_compared, names(all_compared), function(.x, .y){
-      peak_id = paste0(.y,"_", names(.x$info))
-      out_mz = .x$mz
-      rownames(out_mz) = peak_id
-      out_mz
+    all_location = purrr::map2(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y,".", names(.x$info))
+      out_location = .x$location
+      rownames(out_location) = peak_id
+      out_location
     }) %>% do.call(rbind, .)
     all_info = purrr::map2_dfr(all_compared, names(all_compared), function(.x, .y){
-      peak_id = paste0(.y,"_", names(.x$info))
+      peak_id = paste0(.y,".", names(.x$info))
       info = .x$info
       n_info = purrr::map_int(info, nrow)
       info_df = purrr::map2_dfr(info, peak_id, function(tmp_info, tmp_peak){
@@ -832,8 +896,8 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
       info_df
     })
   }
-  return(list(height = all_height,
-              mz = all_mz,
+  return(list(intensity = all_intensity,
+              location = all_location,
               info = all_info))
 }
 
@@ -841,20 +905,20 @@ compare_extract_emfs = function(emf, by = "EMF"){
 
   get_imfs = function(emf_group){
     split_groups = split(emf_group, emf_group$group_imfs)
-    names(split_groups) = paste0("IMF.", seq_along(split_groups))
+    names(split_groups) = paste0("IMF_", seq_along(split_groups))
     single_index = purrr::map_df(split_groups, ~ .x[1, ])
 
-    out_height = compare_heights[single_index$row_index, , drop = FALSE]
-    out_mz = compare_mz[single_index$row_index, , drop = FALSE]
+    out_intensity = compare_intensity[single_index$row_index, , drop = FALSE]
+    out_location = compare_location[single_index$row_index, , drop = FALSE]
 
     out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
 
-    list(height = out_height, mz = out_mz, info = out_info)
+    list(intensity = out_intensity, location = out_location, info = out_info)
   }
 
-  compare_heights = purrr::map(emf, ~ .x$height) %>% do.call(rbind, .)
+  compare_intensity = purrr::map(emf, ~ .x$intensity) %>% do.call(rbind, .)
   compare_info = purrr::map_df(emf, ~ .x$peak_info)
-  compare_mz = purrr::map(emf, ~ .x$mz) %>% do.call(rbind, .)
+  compare_location = purrr::map(emf, ~ .x$location) %>% do.call(rbind, .)
 
   group_imfs = vector("integer", length = nrow(compare_heights))
 
@@ -864,7 +928,7 @@ compare_extract_emfs = function(emf, by = "EMF"){
     master_loc = which(group_imfs == 0)[1]
 
     for (iloc in zero_locs) {
-      if (isTRUE(all.equal(compare_heights[master_loc, ], compare_heights[iloc, ]))) {
+      if (isTRUE(all.equal(compare_intensity[master_loc, ], compare_intensity[iloc, ]))) {
         group_imfs[iloc] = i_group
       }
     }
@@ -914,14 +978,14 @@ compare_extract_emfs = function(emf, by = "EMF"){
 #' of samples, one needs to be able to count which samples the EMF appears in. This function extracts
 #' creates a matrix where ones note the samples that contained the EMF.
 #'
-#' @param emf_heights list of EMF heights
+#' @param emf_intensity list of EMF intensities
 #'
 #' @export
 #' @return matrix
 #'
-extract_emf_propensity = function(emf_heights){
-  presence_matrix = purrr::map(emf_heights, ~ as.integer(colSums(.x) > 0)) %>% do.call(rbind, .)
-  rownames(presence_matrix) = names(emf_heights)
-  colnames(presence_matrix) = colnames(emf_heights[[1]])
+extract_emf_propensity = function(emf_intensity){
+  presence_matrix = purrr::map(emf_intensity, ~ as.integer(colSums(.x) > 0)) %>% do.call(rbind, .)
+  rownames(presence_matrix) = names(emf_intensity)
+  colnames(presence_matrix) = colnames(emf_intensity[[1]])
   presence_matrix
 }
