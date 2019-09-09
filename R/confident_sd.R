@@ -70,9 +70,7 @@ find_confident_frequency_sd = function(assigned_data,
 }
 
 calculate_confident_sd = function(emf_data, scan_level_frequency, sample_peak){
-  peaks_2_emf_imf = purrr::map_df(emf_data, function(in_data){
-    purrr::map_df(in_data, ~ unique(.x[, c("complete_EMF", "complete_IMF", "Sample_Peak")]))
-  })
+  peaks_2_emf_imf = purrr::map_df(emf_data,  ~ unique(.x[, c("complete_EMF", "complete_IMF", "Sample_Peak")]))
 
   split_peaks = split(peaks_2_emf_imf$Sample_Peak, peaks_2_emf_imf$complete_IMF)
 
