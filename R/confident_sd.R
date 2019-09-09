@@ -31,7 +31,7 @@ find_confident_frequency_sd = function(assigned_data,
     low_e_peaks = dplyr::filter(tmp_assign, e_value <= low_evalue_cutoff) %>% dplyr::pull(Sample_Peak)
 
     if (length(base::intersect(low_mz_peaks, low_e_peaks)) >= 20) {
-      return(get_sample_emfs(tmp_assign, .x$sample, .x$scores, evalue_cutoff = low_evalue_cutoff))
+      return(get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = low_evalue_cutoff))
     } else {
       return(NULL)
     }
@@ -65,7 +65,7 @@ find_confident_frequency_sd = function(assigned_data,
 
 calculate_confident_sd = function(emf_data, scan_level_frequency, sample_peak){
   peaks_2_emf_imf = purrr::map_df(emf_data, function(in_data){
-    purrr::map_df(in_data$peak_info, ~ unique(.x[, c("complete_EMF", "complete_IMF", "Sample_Peak")]))
+    purrr::map_df(in_data, ~ unique(.x[, c("complete_EMF", "complete_IMF", "Sample_Peak")]))
   })
 
   split_peaks = split(peaks_2_emf_imf$Sample_Peak, peaks_2_emf_imf$complete_IMF)
