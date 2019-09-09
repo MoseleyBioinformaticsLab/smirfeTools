@@ -1,3 +1,6 @@
+^rds_for_testing$
+^logs$
+^testing_stuff$
 ^lung_subgroups_2019-08-22$
 ^lung_subgroups$
 ^.*\.Rproj$
