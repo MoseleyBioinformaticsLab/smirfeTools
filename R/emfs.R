@@ -349,13 +349,13 @@ keep_emfs_with_features = function(features, emf_info){
 #'
 #' @param split_emfs list of EMF data.frames
 #' @param feature_intensities matrix of feature (rows) by sample (column) intensities
-#' @param feature_mz matrix of M/Z values
+#' @param feature_location matrix of M/Z values
 #' @param multiply_C13 should the intensities be multiplied by the C13 incorporation? (FALSE)
 #'
 #' @importFrom dplyr "%>%"
 #' @export
 #' @return list
-get_emf_intensity_sums = function(split_emfs, feature_intensities, feature_mz, multiply_C13 = FALSE){
+get_emf_intensity_sums = function(split_emfs, feature_intensities, feature_location, multiply_C13 = FALSE){
 
   emf_data = list(sums = purrr::map(split_emfs, function(in_emf){
     if (multiply_C13){
@@ -369,29 +369,29 @@ get_emf_intensity_sums = function(split_emfs, feature_intensities, feature_mz, m
     dplyr::select(in_emf, complete_EMF, PredictedClasses,
                   PredictedCategories, Categories, Classes) %>%
       dplyr::sample_n(., 1)}) %>%
-    dplyr::mutate(., mz = purrr::map_dbl(split_emfs, function(in_emf){
+    dplyr::mutate(., location = purrr::map_dbl(split_emfs, function(in_emf){
                     use_peak = in_emf$peak[in_emf$C13 == min(in_emf$C13)]
-                    min(feature_mz[use_peak, ], na.rm = TRUE)
+                    min(feature_location[use_peak, ], na.rm = TRUE)
                   }))
   )
   emf_data
 }
 
-#' Extract Single M/Z
+#' Extract Single Location
 #'
-#' Given a list of EMF M/Z, we would like to get a single M/Z for each EMF,
+#' Given a list of EMF locations, we would like to get a single location for each EMF,
 #' as by definition an EMF often has at least two IMFs.
 #'
-#' @param emf_list_mz the list of EMF M/Zs
+#' @param emf_list_location the list of EMF locations
 #'
 #' @export
 #'
-extract_emf_mz = function(emf_list_mz){
-  single_mz = function(matrix_mz, emf_id){
-    mean_samples = rowMeans(matrix_mz, na.rm = TRUE)
-    data.frame(emf = emf_id, mz = mean_samples[1], stringsAsFactors = FALSE)
+extract_emf_location = function(emf_list_location){
+  single_location = function(matrix_location, emf_id){
+    mean_samples = rowMeans(matrix_location, na.rm = TRUE)
+    data.frame(emf = emf_id, location = mean_samples[1], stringsAsFactors = FALSE)
   }
 
-  emf_mz = purrr::imap_dfr(emf_list_mz, single_mz)
-  emf_mz
+  emf_location = purrr::imap_dfr(emf_list_location, single_location)
+  emf_location
 }
