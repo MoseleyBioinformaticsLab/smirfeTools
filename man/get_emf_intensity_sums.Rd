@@ -4,7 +4,7 @@
 \alias{get_emf_intensity_sums}
 \title{Get EMF sums}
 \usage{
-get_emf_intensity_sums(split_emfs, feature_intensities, feature_mz,
+get_emf_intensity_sums(split_emfs, feature_intensities, feature_location,
   multiply_C13 = FALSE)
 }
 \arguments{
@@ -12,7 +12,7 @@ get_emf_intensity_sums(split_emfs, feature_intensities, feature_mz,
 
 \item{feature_intensities}{matrix of feature (rows) by sample (column) intensities}
 
-\item{feature_mz}{matrix of M/Z values}
+\item{feature_location}{matrix of M/Z values}
 
 \item{multiply_C13}{should the intensities be multiplied by the C13 incorporation? (FALSE)}
 }

@@ -12,7 +12,7 @@ extract_imf_emf_data(emfs, by = "EMF")
 \item{by}{\code{EMF} (default) or \code{IMF}}
 }
 \value{
-list with \code{height}, \code{mz}, and \code{info}
+list with \code{intensity}, \code{location}, and \code{info}
 }
 \description{
 Extract either IMF or EMF level data from the extracted EMFs. Which is controlled by the \code{by} argument.

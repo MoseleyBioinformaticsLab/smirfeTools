@@ -4,10 +4,10 @@
 \alias{extract_emf_propensity}
 \title{extract EMF propensity}
 \usage{
-extract_emf_propensity(emf_heights)
+extract_emf_propensity(emf_intensity)
 }
 \arguments{
-\item{emf_heights}{list of EMF heights}
+\item{emf_intensity}{list of EMF intensities}
 }
 \value{
 matrix
