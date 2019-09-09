@@ -184,7 +184,7 @@ extract_coefficient_data = function(zip_file_list){
     warning(warning_message)
   }
 
-  purrr::map(json_files[exist_json], function(use_file){
+  internal_map$map_function(json_files[exist_json], function(use_file){
     list(sample = gsub(".json$", "", basename(use_file)),
          coefficients = jsonlite::fromJSON(use_file)$peak$frequency_mz)
   })
