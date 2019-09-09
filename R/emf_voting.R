@@ -320,6 +320,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
   # this also needs to have the peaks sorted by their NAP, and match in order
   # of NAP. When the next one doesn't match, stop!
   match_location = purrr::map_df(just_peaks, function(test_peak){
+    #message(test_peak)
     test_location = dplyr::filter(peak_location, Sample_Peak %in% test_peak)
     mean_diffs = mean_location
     mean_diffs$diff = abs(mean_location$location - test_location$Value)
@@ -404,7 +405,9 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
   na_score = na_dataframe(all_emf_info)
 
   gemf_emf = purrr::map_df(grouped_emfs, function(.x){
-    match_emf = dplyr::filter(.x, complete_EMF %in% keep_emf$complete_EMF, type %in% "primary")
+    .x = dplyr::filter(.x, type %in% "primary") # this keeps secondary
+    # peaks from creeping into the bit below
+    match_emf = dplyr::filter(.x, complete_EMF %in% keep_emf$complete_EMF)
 
     if (nrow(match_emf) == 0) {
       match_emf = purrr::map_df(seq(1, length(unique(.x$Sample_Peak))), ~ na_score)
@@ -439,7 +442,7 @@ choose_emf = function(grouped_emfs, scan_level_location, peak_location, differen
       imf_by_emf = split(trimmed_gemf_emf, trimmed_gemf_emf$complete_EMF)
 
       imf_matches = purrr::map_df(purrr::cross2(imf_by_emf, missing_imf), function(x){
-        message(x[[2]]$grouped_EMF[1])
+        #message(paste0(x[[1]]$complete_EMF[1], x[[2]]$grouped_EMF[1]))
         "!DEBUG `x[[2]]$grouped_EMF[1]`"
         match_imf_by_difference(x[[1]], x[[2]], use_scans, use_location, use_difference_cutoff)
       })
@@ -535,16 +538,16 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
 remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
   peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
     #message(.y)
-    data.frame(Sample_Peak = unique(unlist(.x$Sample_Peak, use.names = FALSE)),
-               semf = .y,
+    data.frame(Sample_Peak = unique(.x$Sample_Peak),
+               sudo_EMF = .y,
                stringsAsFactors = FALSE)
   })
 
   dup_peaks = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
   has_dup_semf = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% dup_peaks)
 
-  has_dup_emf = which(names(chosen_emfs) %in% unique(has_dup_semf$semf))
-  non_dup_emf = which(!(names(chosen_emfs) %in% unique(has_dup_semf$semf)))
+  has_dup_emf = which(names(chosen_emfs) %in% unique(has_dup_semf$sudo_EMF))
+  non_dup_emf = which(!(names(chosen_emfs) %in% unique(has_dup_semf$sudo_EMF)))
 
   non_dup_chosen = chosen_emfs[non_dup_emf]
   potential_dup_chosen = chosen_emfs[has_dup_emf]
@@ -552,14 +555,14 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
   chosen_emfs_dedup = internal_map$map_function(potential_dup_chosen, function(in_semf){
     peak_2_gemf = purrr::map_df(seq(1, nrow(in_semf)), function(in_row){
       data.frame(Sample_Peak = in_semf[in_row, "Sample_Peak"][[1]],
-                 grouped_emf = in_semf[in_row, "grouped_emf"],
+                 grouped_EMF = in_semf[in_row, "grouped_EMF"],
                  stringsAsFactors = FALSE)
     })
     bad_gemfs = dplyr::filter(peak_2_gemf, Sample_Peak %in% dup_peaks)
-    good_gemfs = dplyr::filter(peak_2_gemf, !(grouped_emf %in% bad_gemfs$grouped_emf))
+    good_gemfs = dplyr::filter(peak_2_gemf, !(grouped_EMF %in% bad_gemfs$grouped_EMF))
 
     if (nrow(good_gemfs) > 0) {
-      return(choose_emf(all_gemfs[unique(good_gemfs$grouped_emf)], scan_level_location, peak_location, difference_cutoff, keep_ratio))
+      return(choose_emf(all_gemfs[unique(good_gemfs$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, keep_ratio))
     } else {
       return(NULL)
     }
@@ -568,7 +571,7 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
 
   dedup_null = purrr::map_lgl(chosen_emfs_dedup, is.null)
   out_emfs = c(non_dup_chosen, chosen_emfs_dedup[!dedup_null])
-  names(out_emfs) = paste0("SEMF.", seq(1, length(out_emfs)))
+  names(out_emfs) = paste0("SEMF_", seq(1, length(out_emfs)))
   out_emfs
 }
 
@@ -590,21 +593,22 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
 #' @return list
 #' @export
 merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
-  peak_2_voted_emf = purrr::map2_df(chosen_emfs, names(chosen_emfs), function(.x, .y){
-    all_peaks = unique(unlist(purrr::map(.x$Sample_Peak, ~ .x), use.names = FALSE))
-    data.frame(Sample_Peak = all_peaks, semf = .y, stringsAsFactors = FALSE)
+  peak_2_voted_emf = purrr::imap_dfr(chosen_emfs, function(.x, .y){
+    tmp_frame = dplyr::select(.x, Sample_Peak)
+    tmp_frame$sudo_EMF = .y
+    unique(tmp_frame)
   })
 
 
   dup_peaks = dplyr::filter(peak_2_voted_emf, Sample_Peak %in% (unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)]))) %>%
     dplyr::arrange(Sample_Peak)
 
-  use_semfs = unique(dup_peaks$semf)
+  use_semfs = unique(dup_peaks$sudo_EMF)
 
   index_semfs = dup_semfs = purrr::map(use_semfs, ~ .x)
   names(index_semfs) = names(dup_semfs) = use_semfs
-  index_semfs_peaks = purrr::map(chosen_emfs[use_semfs], ~ unique(unlist(.x$Sample_Peak, use.names = FALSE)))
-  index_semfs_gemfs = purrr::map(chosen_emfs[use_semfs], ~ unique(unlist(.x$grouped_emf, use.names = FALSE)))
+  index_semfs_peaks = purrr::map(chosen_emfs[use_semfs], ~ unique(.x$Sample_Peak, use.names = FALSE))
+  index_semfs_gemfs = purrr::map(chosen_emfs[use_semfs], ~ unique(.x$grouped_EMF, use.names = FALSE))
 
   dup_semfs_peaks = index_semfs_peaks
   dup_semfs_gemfs = index_semfs_gemfs
@@ -628,16 +632,16 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, pe
     }
   }
   keep_semfs = !duplicated(index_semfs)
-  merged_gemfs = purrr::map(dup_semfs_gemfs[keep_semfs], ~ data.frame(grouped_emf = .x, stringsAsFactors = FALSE))
+  merged_gemfs = purrr::map(dup_semfs_gemfs[keep_semfs], ~ data.frame(grouped_EMF = .x, stringsAsFactors = FALSE))
   dup_semfs = use_semfs
 
   chosen_nondup = chosen_emfs[!(names(chosen_emfs) %in% use_semfs)]
   chosen_duplicates = internal_map$map_function(merged_gemfs, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_emf)], scan_level_location, peak_location, difference_cutoff, keep_ratio)
+    choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, keep_ratio)
   })
 
   all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
-  names(all_chosen_emfs) = paste0("SEMF.", seq(1, length(all_chosen_emfs)))
+  names(all_chosen_emfs) = paste0("SEMF_", seq(1, length(all_chosen_emfs)))
 
   remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio)
 
@@ -652,8 +656,7 @@ extract_emfs = function(chosen_emfs){
   #all_emfs = internal_map$map_function(chosen_emfs, function(use_emf){
   all_emfs = purrr::map(seq(1, length(chosen_emfs)), function(i_emf){
     #message(i_emf)
-    use_emf = chosen_emfs[[i_emf]]
-    peak_info = purrr::map_df(use_emf$info, ~ .x)
+    peak_info = chosen_emfs[[i_emf]]
 
     split_emf = split(peak_info, peak_info$complete_EMF)
 
@@ -731,6 +734,7 @@ extract_emfs = function(chosen_emfs){
 
   })
 
+  names(all_emfs) = names(chosen_emfs)
   semf_emf = purrr::map2_df(all_emfs, names(all_emfs), function(.x, .y){
     data.frame(semf = .y, emf = names(.x), stringsAsFactors = FALSE)
   })
@@ -892,7 +896,7 @@ compare_extract_emfs = function(emf, by = "EMF"){
       .x
     })
     split_emfs = split(df_groups2, df_groups2$group_emfs)
-    names(split_emfs) = paste0("EMF.", seq_along(split_emfs))
+    names(split_emfs) = paste0("EMF_", seq_along(split_emfs))
 
     out_data = purrr::map(split_emfs, get_imfs)
 
