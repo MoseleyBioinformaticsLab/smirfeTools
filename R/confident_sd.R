@@ -51,7 +51,13 @@ find_confident_frequency_sd = function(assigned_data,
   confident_all_gemfs = unlist(confident_emfs, recursive = FALSE, use.names = FALSE)
   names(confident_all_gemfs) = purrr::map_chr(confident_all_gemfs, ~ .x$grouped_EMF[1])
 
-  sd_information = internal_map$map_function(confident_sudo_emfs, function(in_sudo){
+  # sd_information = internal_map$map_function(confident_sudo_emfs, function(in_sudo){
+  #   calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
+  # })
+
+  sd_information = purrr::map(names(confident_sudo_emfs), function(sudo_id){
+    message(sudo_id)
+    in_sudo = confident_sudo_emfs[[sudo_id]]
     calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
   })
 
