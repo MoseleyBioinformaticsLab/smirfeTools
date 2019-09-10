@@ -665,9 +665,7 @@ extract_assignments <- function(assignment_list){
   not_null_entries = !purrr::map_lgl(assignment_list, is.null)
   assignment_list = assignment_list[not_null_entries]
   assignment_df <- as.data.frame(assignment_list)
-  keep_names <- names(assignment_df)[!(names(assignment_df) %in% c("complete_IMF", "complete_EMF", "adduct_IMF"))]
 
-  suppressWarnings(tidyr::gather(assignment_df, key = "Type", value = "Assignment_Data", !!keep_names))
 }
 
 extract_peak_data <- function(single_peak_list){
@@ -682,7 +680,7 @@ extract_peak_data <- function(single_peak_list){
   keep_names <- single_names[!(single_names %in% "PeakID")]
 
 
-  single_df <- tidyr::gather(as.data.frame(single_peak_list), key = "Measurement", value = "Value", !!keep_names)
+  single_df <- as.data.frame(single_peak_list)
 
   if (length(assignments) != 0) {
     peak_assignment <- suppressWarnings(purrr::map_df(assignments, extract_assignments))
