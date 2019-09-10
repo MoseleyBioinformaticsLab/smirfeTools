@@ -31,7 +31,9 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   }
 
   tictoc::tic()
-  peak_info <- internal_map$map_function(tmp_list$Peaks[to_extract], extract_peak_data)
+  extract_list = which(to_extract)
+  extract_list = sample(extract_list, length(extract_list))
+  peak_info <- internal_map$map_function(tmp_list$Peaks[extract_list], extract_peak_data)
   tictoc::toc()
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
 
