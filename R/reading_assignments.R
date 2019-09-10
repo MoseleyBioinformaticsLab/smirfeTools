@@ -30,11 +30,11 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
     to_extract <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
   }
 
-  tictoc::tic()
+  #tictoc::tic()
   extract_list = which(to_extract)
   extract_list = sample(extract_list, length(extract_list))
   peak_info <- internal_map$map_function(tmp_list$Peaks[extract_list], extract_peak_data)
-  tictoc::toc()
+  #tictoc::toc()
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
 
   peak_assignments <- purrr::map_dfr(peak_info, "assignment")
