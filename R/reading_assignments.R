@@ -664,7 +664,7 @@ extract_assignments <- function(assignment_list){
 
   not_null_entries = !purrr::map_lgl(assignment_list, is.null)
   assignment_list = assignment_list[not_null_entries]
-  assignment_df <- as.data.frame(assignment_list)
+  assignment_df <- as.data.frame(assignment_list, stringsAsFactors = FALSE)
 
 }
 
@@ -680,7 +680,7 @@ extract_peak_data <- function(single_peak_list){
   keep_names <- single_names[!(single_names %in% "PeakID")]
 
 
-  single_df <- as.data.frame(single_peak_list)
+  single_df <- as.data.frame(single_peak_list, stringsAsFactors = FALSE)
 
   if (length(assignments) != 0) {
     peak_assignment <- suppressWarnings(purrr::map_df(assignments, extract_assignments))
