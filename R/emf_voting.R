@@ -78,7 +78,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
         other_data = in_multi[-m_row, , drop = FALSE]
         other_evidence = dplyr::filter(sample_assignments, isotopologue_EMF %in% other_data$isotopologue_EMF,
                                        grouped_EMF %in% other_data$grouped_EMF)
-        evidence_2 = group_by(other_evidence, gc) %>% slice(1) %>% ungroup()
+        evidence_2 = dplyr::group_by(other_evidence, gc) %>% slice(1) %>% ungroup()
         evidence_2$grouped_EMF = in_multi$grouped_EMF[m_row]
         evidence_2$complete_EMF = in_multi$complete_EMF[m_row]
         evidence_2$type = "secondary"
