@@ -45,6 +45,8 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
   peak_assignments$Sample <- sample
   peak_assignments$Sample_Peak <- paste0(sample, "_", peak_assignments$PeakID)
 
+  peak_assignments = dplyr::left_join(peak_assignments, peak_data[, c("PeakID", "ObservedMZ")], by = "PeakID")
+
   peak_id = paste0(sample, "_", unlist(tmp_list$ScanLevel$PeakID))
   keep_peaks = unique(peak_assignments$Sample_Peak)
   scan_level_lists = purrr::map(tmp_list$ScanLevel[c("CorrectedLog10Height", "Log10Height",
