@@ -22,16 +22,14 @@ find_confident_frequency_sd = function(assigned_data,
 
   sample_peak = purrr::map_df(assigned_data, ~ unique(.x$data[, c("Sample", "Sample_Peak")]))
 
-  confident_emfs = purrr::map(seq(1, length(assigned_data)), function(in_assign){
-    .x = assigned_data[[in_assign]]
+  confident_emfs = purrr::map(assigned_data, function(in_assign){
+    assignments = in_assign$assignments
     #message(paste0(in_assign, "  ", .x$sample))
-    low_mz_peaks = dplyr::filter(.x$data, ObservedMZ <= low_mz_cutoff) %>% dplyr::pull(Sample_Peak)
+    low_e_mz = dplyr::filter(assignments, (e_value <= low_evalue_cutoff) &
+                               (ObservedMZ <= low_mz_cutoff) & (!grepl("S", complete_EMF)))
 
-    tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
-    low_e_peaks = dplyr::filter(tmp_assign, e_value <= low_evalue_cutoff) %>% dplyr::pull(Sample_Peak)
-
-    if (length(base::intersect(low_mz_peaks, low_e_peaks)) >= 20) {
-      return(get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = low_evalue_cutoff))
+    if (length(unique(low_e_mz$Sample_Peak)) >= 20) {
+      return(get_sample_emfs(low_e_mz, in_assign$sample, evalue_cutoff = low_evalue_cutoff, use_corroborating = FALSE))
     } else {
       return(NULL)
     }
@@ -55,7 +53,7 @@ find_confident_frequency_sd = function(assigned_data,
   #   calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
   # })
 
-  sd_information = purrr::map(names(confident_sudo_emfs), function(sudo_id){
+  sd_information = internal_map$map_function(names(confident_sudo_emfs), function(sudo_id){
     #message(sudo_id)
     in_sudo = confident_sudo_emfs[[sudo_id]]
     calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
