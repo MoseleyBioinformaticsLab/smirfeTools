@@ -1,3 +1,30 @@
+#' score and filter assignments
+#'
+#' Given assignments (either a filename or list), calculate scores, and filter
+#' the assignments by M/Z
+#'
+#' @param assignments a character or list object
+#' @param score_calculation how to calculate the score
+#' @param score_weight multiplier to apply to the scores (default = 1)
+#' @param filter_conditions how the data should be filtered
+#'
+#' @export
+#' @return data.frame of assignments with scores added
+score_filter_assignments = function(assignments, score_calculation = 1 - e_value,
+                                       score_weight = 1, filter_conditions = ObservedMZ <= 1600){
+  if (inherits(assignments, "character")) {
+    assignments = readRDS(assignments)
+  }
+
+  sample_assignments = assignments$assignments
+  sample_assignments = dplyr::mutate(sample_assignments, score = ({{score_calculation}}) * score_weight)
+
+  sample_assignments = dplyr::filter(sample_assignments, {{filter_conditions}})
+
+  assignments$assignments = sample_assignments
+  assignments
+}
+
 #' read SMIRFE assignments
 #'
 #' Given a SMIRFE JSON output file, read it in, along with other useful

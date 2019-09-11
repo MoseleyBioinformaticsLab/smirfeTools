@@ -1,24 +1,3 @@
-#' calculate assignment scores
-#'
-#' Given the assignment data.frame, calculate new scores for every assignment.
-#' The default is 1 - e_value, with a weighting of 1.
-#'
-#' @param sample_assignments the assignments data.frame
-#' @param variable the variable to calculate scores from
-#' @param weight multiplier to apply to the scores (default = 1)
-#' @param calculation how to calculate the scores (default = "one_minus")
-#'
-#' @export
-#' @return data.frame of assignments with scores added
-calculate_assignment_scores = function(single_sample, variable = "e_value",
-                            weight = 1, calculation = "one_minus"){
-  sample_assignments = single_sample$assignments
-  sample_assignments$score = switch(calculation,
-                                    one_minus = (1 - sample_assignments[[variable]]) * weight)
-  single_sample$assignments = sample_assignments
-  single_sample
-}
-
 #' extract sample level elemental molecular formulas
 #'
 #' given the assignment data.frame, group and extract EMF level information
