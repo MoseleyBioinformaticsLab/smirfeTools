@@ -899,7 +899,7 @@ compare_extract_emfs = function(emf, by = "EMF"){
   compare_info = purrr::map_df(emf, ~ .x$peak_info)
   compare_location = purrr::map(emf, ~ .x$location) %>% do.call(rbind, .)
 
-  group_imfs = vector("integer", length = nrow(compare_heights))
+  group_imfs = vector("integer", length = nrow(compare_intensity))
 
   i_group = 1
   while (sum(group_imfs == 0) > 0) {
