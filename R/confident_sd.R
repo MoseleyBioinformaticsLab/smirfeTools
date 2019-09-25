@@ -79,30 +79,40 @@ calculate_confident_sd = function(emf_data, scan_level_frequency, sample_peak){
   n_peak = purrr::map_int(split_peaks, length)
   split_peaks = split_peaks[order(n_peak, decreasing = TRUE)]
 
-  merged_peaks = vector("list", length(split_peaks))
-  combined_data = merged_peaks
-  is_grabbable = rep(TRUE, length(split_peaks))
 
-  for (isplit in seq(1, length(split_peaks) - 1)) {
-    if (is_grabbable[isplit]) {
-      merged_peaks[[isplit]] = split_peaks[[isplit]]
-      is_grabbable[isplit] = FALSE
-    }
+  # this code is trying to do the same thing as for reducing duplicates in
+  # sudo emfs, basically testing if there is more than 50% overlap of peaks
+  # between IMFs, and if so, merges them.
+  if (length(split_peaks) > 1) {
+    merged_peaks = vector("list", length(split_peaks))
+    combined_data = merged_peaks
+    is_grabbable = rep(TRUE, length(split_peaks))
 
-    for (jsplit in seq(isplit+1, length(split_peaks))) {
-      #message(jsplit)
-      if (is_grabbable[jsplit]) {
-        inter_ratio = length(intersect(split_peaks[[jsplit]], merged_peaks[[isplit]])) / length(split_peaks[[jsplit]])
-        if (inter_ratio >= 0.5) {
-          merged_peaks[[isplit]] = union(split_peaks[[jsplit]], merged_peaks[[isplit]])
-          is_grabbable[jsplit] = FALSE
-          combined_data[[isplit]] = unique(c(combined_data[[isplit]], isplit, jsplit))
+    for (isplit in seq(1, length(split_peaks) - 1)) {
+      if (is_grabbable[isplit]) {
+        merged_peaks[[isplit]] = split_peaks[[isplit]]
+        is_grabbable[isplit] = FALSE
+      }
+
+      for (jsplit in seq(isplit+1, length(split_peaks))) {
+        #message(jsplit)
+        if (is_grabbable[jsplit]) {
+          inter_ratio = length(intersect(split_peaks[[jsplit]], merged_peaks[[isplit]])) / length(split_peaks[[jsplit]])
+          if (inter_ratio >= 0.5) {
+            merged_peaks[[isplit]] = union(split_peaks[[jsplit]], merged_peaks[[isplit]])
+            is_grabbable[jsplit] = FALSE
+            combined_data[[isplit]] = unique(c(combined_data[[isplit]], isplit, jsplit))
+          }
         }
       }
     }
+
+    merged_peaks = merged_peaks[!(purrr::map_lgl(merged_peaks, is.null))]
+
+  } else {
+    merged_peaks = split_peaks
   }
 
-  merged_peaks = merged_peaks[!(purrr::map_lgl(merged_peaks, is.null))]
 
   merged_peaks = purrr::map(merged_peaks, function(in_peaks){
     tmp_sample = dplyr::filter(sample_peak, Sample_Peak %in% in_peaks)
