@@ -55,6 +55,7 @@ find_confident_frequency_sd = function(assigned_data,
 
   sd_information = internal_map$map_function(names(confident_sudo_emfs), function(sudo_id){
     #message(sudo_id)
+    "!DEBUG `sudo_id`"
     in_sudo = confident_sudo_emfs[[sudo_id]]
     calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
   })
