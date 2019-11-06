@@ -5,7 +5,7 @@
 \title{score and filter assignments}
 \usage{
 score_filter_assignments(assignments, score_calculation = 1 - e_value,
-  score_weight = 1, filter_conditions = NULL)
+  score_weight = 1, filter_conditions = ObservedMZ <= 1600)
 }
 \arguments{
 \item{assignments}{a character or list object}
