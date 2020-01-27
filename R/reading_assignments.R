@@ -11,7 +11,8 @@
 #' @export
 #' @return data.frame of assignments with scores added
 score_filter_assignments = function(assignments, score_calculation = 1 - e_value,
-                                       score_weight = 1, filter_conditions = ObservedMZ <= 1600){
+                                       score_weight = 1, filter_conditions = ObservedMZ <= 1600,
+                                    high_correlation = 0.5){
   if (inherits(assignments, "character")) {
     assignments = readRDS(assignments)
   }
@@ -20,6 +21,27 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
   sample_assignments = dplyr::mutate(sample_assignments, score = ({{score_calculation}}) * score_weight)
 
   sample_assignments = dplyr::filter(sample_assignments, {{filter_conditions}})
+
+  sample_data = assignments$data
+  # this tries to filter out assignments where the assignments are wholly due
+  # to either peaks with high correlation with scan or peaks that have
+  # high standard deviation in frequency space across scans. If all the peaks
+  # in the assignment are like that, then the assignment is filtered out.
+  # Any assignments where only some of the peaks are from those abberant conditions
+  # are kept.
+  if (all(c("ScanCorrelation", "HighScan", "HighSD") %in% names(sample_data))) {
+    high_peaks = ((sample_data$ScanCorrelation >= high_correlation) & sample_data$HighScan) | sample_data$HighSD
+    sample_data = sample_data[high_peaks, ]
+    if (nrow(sample_data) > 0) {
+      sample_assignments = sample_assignments[order(sample_assignments$complete_EMF), ]
+      grouped_assignments = dplyr::group_by(sample_assignments, complete_EMF)
+      summary_assignments = dplyr::summarise(grouped_assignments, n_peak = length(unique(PeakID)),
+                                             n_high = sum(unique(PeakID) %in% sample_data$PeakID))
+      reject_assignments = dplyr::filter(summary_assignments, n_peak == n_high)
+      sample_assignments = dplyr::filter(sample_assignments, !(complete_EMF %in% reject_assignments$complete_EMF))
+    }
+
+  }
 
   assignments$assignments = sample_assignments
   assignments
