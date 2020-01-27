@@ -6,11 +6,12 @@
 #' @param sample_id which sample is it
 #' @param evalue_cutoff what value should be used to exclude EMFs? (default is 0.98)
 #' @param use_corroborating should other adducts be added for corroborating evidence (default is `TRUE`)
+#' @param emf_classifications data.frame of classifications for isotopologue_EMFs
 #'
 #' @return list
 #'
 #' @export
-get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE){
+get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, use_corroborating = TRUE, emf_classifications = NULL){
   log_memory()
 
   sample_assignments = dplyr::filter(sample_assignments, e_value <= evalue_cutoff)
@@ -26,6 +27,35 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   grouped_scores = dplyr::summarise(grouped_assignments, gc = gc[1], voting_score = score[which.max(clique_size)[1]],
                                     type = "primary")
   sample_assignments = dplyr::left_join(sample_assignments, grouped_scores[, c("gc", "voting_score", "type")], by = "gc")
+
+
+  # if classifications are available, use them to trim the EMFs
+  if (!is.null(emf_classifications)) {
+    grouped_assignments = split(sample_assignments, sample_assignments$grouped_EMF)
+    tmp_classifications = dplyr::mutate(emf_classifications,
+                                        cat2 = dplyr::case_when(
+                                          is.na(Categories) ~ "not_lipid",
+                                          Categories %in% "not_lipid" ~ "not_lipid",
+                                          TRUE ~ "lipid"
+                                        )) %>%
+      dplyr::select(isotopologue_EMF, cat2) %>%
+      unique(.)
+
+    grouped_assignments = internal_map$map_function(grouped_assignments, function(in_assign){
+      tmp_assign = unique(in_assign[, c("isotopologue_EMF"), drop = FALSE])
+      tmp_assign = dplyr::left_join(tmp_assign, tmp_classifications, by = "isotopologue_EMF") %>%
+        dplyr::filter(cat2 %in% "lipid")
+
+      if (nrow(tmp_assign) == 0) {
+        return(in_assign)
+      } else {
+        in_assign = dplyr::filter(in_assign, isotopologue_EMF %in% tmp_assign$isotopologue_EMF)
+        return(in_assign)
+      }
+    })
+    sample_assignments = do.call(rbind, grouped_assignments)
+  }
+
 
   if (use_corroborating) {
     emf_by_emf = unique(dplyr::select(sample_assignments, complete_EMF, adduct_IMF, isotopologue_EMF, grouped_EMF))

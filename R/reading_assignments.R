@@ -151,7 +151,7 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #' Extract the data from a complete set of assignments.
 #'
 #' @param assigned_data a list of assignments created from `read_smirfe_assignments`
-#' @param remove_secondary remove the seconardy assignments? (default is TRUE)
+#' @param emf_classifications data.frame of isotopologue_EMF classifications
 #' @param sample_peak which variable holds the sample peak
 #' @param imf which variable holds the IMF information
 #' @param e_value the e-values
@@ -176,6 +176,7 @@ remove_only_labeled_emfs = function(assignment_data, remove_s = TRUE){
 #'
 #' @return list of matrices and a data.frame
 extract_assigned_data <- function(assigned_data,
+                                  emf_classifications = NULL,
                                   sample_peak = "Sample_Peak",
                                   imf = "complete_IMF",
                                   e_value = "e_value",
@@ -235,7 +236,7 @@ extract_assigned_data <- function(assigned_data,
     }
     log_message(progress_msg)
     tmp_assign = dplyr::filter(.x$assignments, !grepl(remove_elements, complete_EMF))
-    get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff)
+    get_sample_emfs(tmp_assign, .x$sample, evalue_cutoff = evalue_cutoff, emf_classifications = emf_classifications)
   })
 
 
