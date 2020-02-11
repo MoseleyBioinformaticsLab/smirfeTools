@@ -7,12 +7,16 @@
 #' @param score_calculation how to calculate the score
 #' @param score_weight multiplier to apply to the scores (default = 1)
 #' @param filter_conditions how the data should be filtered
+#' @param remove_highsd should the high standard deviation peaks be removed
+#' @param remove_contaminants should peaks that were marked as contaminants be removed
 #'
 #' @export
 #' @return data.frame of assignments with scores added
 score_filter_assignments = function(assignments, score_calculation = 1 - e_value,
                                        score_weight = 1, filter_conditions = ObservedMZ <= 1600,
-                                    high_correlation = 0.5){
+                                    high_correlation = 0.5,
+                                    remove_highsd = TRUE,
+                                    remove_contaminants = TRUE){
   if (inherits(assignments, "character")) {
     assignments = readRDS(assignments)
   }
@@ -29,7 +33,7 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
   # in the assignment are like that, then the assignment is filtered out.
   # Any assignments where only some of the peaks are from those abberant conditions
   # are kept.
-  if (all(c("ScanCorrelation", "HighScan", "HighSD") %in% names(sample_data))) {
+  if (all(c("ScanCorrelation", "HighScan", "HighSD") %in% names(sample_data)) && remove_highsd) {
     high_peaks = ((sample_data$ScanCorrelation >= high_correlation) & sample_data$HighScan) | sample_data$HighSD
     sample_data = sample_data[high_peaks, ]
     if (nrow(sample_data) > 0) {
@@ -42,7 +46,7 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
     }
 
   }
-  if ("StandardContaminant" %in% names(sample_data)) {
+  if (("StandardContaminant" %in% names(sample_data)) && remove_contaminants) {
     standard_peaks = sample_data$PeakID[sample_data$StandardContaminant]
     sample_assignments = dplyr::mutate(sample_assignments, emf.size = paste0(complete_EMF, ".", clique_size))
     has_standard = sample_assignments$PeakID %in% standard_peaks
