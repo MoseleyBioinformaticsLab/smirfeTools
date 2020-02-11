@@ -42,6 +42,17 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
     }
 
   }
+  if ("StandardContaminant" %in% names(sample_data)) {
+    standard_peaks = sample_data$PeakID[sample_data$StandardContaminant]
+    sample_assignments = dplyr::mutate(sample_assignments, emf.size = paste0(complete_EMF, ".", clique_size))
+    has_standard = sample_assignments$PeakID %in% standard_peaks
+    filter_complete = unique(sample_assignments$complete_EMF[has_standard])
+    grouped_possible_standard = dplyr::group_by(sample_assignments[sample_assignments$complete_EMF %in% filter_complete, ], emf.size)
+    summary_hasstandard = dplyr::summarise(grouped_possible_standard, has_standard = any(unique(PeakID) %in% standard_peaks)) %>%
+      dplyr::filter(has_standard)
+    sample_assignments = dplyr::filter(sample_assignments, !(emf.size %in% summary_hasstandard$emf.size))
+    sample_assignments$emf.size = NULL
+  }
 
   assignments$assignments = sample_assignments
   assignments
