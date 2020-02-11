@@ -4,9 +4,10 @@
 \alias{extract_assigned_data}
 \title{extract data}
 \usage{
-extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
-  imf = "complete_IMF", e_value = "e_value", evalue_cutoff = 0.5,
-  emf = "complete_EMF", sample = "Sample", mz_diff = "mass_error",
+extract_assigned_data(assigned_data, emf_classifications = NULL,
+  sample_peak = "Sample_Peak", imf = "complete_IMF",
+  e_value = "e_value", evalue_cutoff = 0.5, emf = "complete_EMF",
+  sample = "Sample", mz_diff = "mass_error",
   data_col = "Assignment_Data", numeric_values = c("e_value",
   "mass_error", "NAP", "lbl.count", "clique_size"),
   observed_mz = "ObservedMZ", observed_frequency = "ObservedFrequency",
@@ -16,6 +17,8 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}
+
+\item{emf_classifications}{data.frame of isotopologue_EMF classifications}
 
 \item{sample_peak}{which variable holds the sample peak}
 
@@ -42,8 +45,6 @@ extract_assigned_data(assigned_data, sample_peak = "Sample_Peak",
 \item{use_scan_level}{should scan level data be used for estimating SDs?}
 
 \item{progress}{should the progress be shown?}
-
-\item{remove_secondary}{remove the seconardy assignments? (default is TRUE)}
 
 \item{observe_frequency}{which variable holds the observed frequency data}
 

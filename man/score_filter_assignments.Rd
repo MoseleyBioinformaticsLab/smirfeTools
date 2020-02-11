@@ -5,7 +5,9 @@
 \title{score and filter assignments}
 \usage{
 score_filter_assignments(assignments, score_calculation = 1 - e_value,
-  score_weight = 1, filter_conditions = ObservedMZ <= 1600)
+  score_weight = 1, filter_conditions = ObservedMZ <= 1600,
+  high_correlation = 0.5, remove_highsd = TRUE,
+  remove_contaminants = TRUE)
 }
 \arguments{
 \item{assignments}{a character or list object}
@@ -15,6 +17,10 @@ score_filter_assignments(assignments, score_calculation = 1 - e_value,
 \item{score_weight}{multiplier to apply to the scores (default = 1)}
 
 \item{filter_conditions}{how the data should be filtered}
+
+\item{remove_highsd}{should the high standard deviation peaks be removed}
+
+\item{remove_contaminants}{should peaks that were marked as contaminants be removed}
 }
 \value{
 data.frame of assignments with scores added

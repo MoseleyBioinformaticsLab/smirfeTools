@@ -5,7 +5,7 @@
 \title{extract sample level elemental molecular formulas}
 \usage{
 get_sample_emfs(sample_assignments, sample_id, evalue_cutoff = 0.98,
-  use_corroborating = TRUE)
+  use_corroborating = TRUE, emf_classifications = NULL)
 }
 \arguments{
 \item{sample_assignments}{a sample level assignment data.frame from \code{read_smirfe_assignment}}
@@ -15,6 +15,8 @@ get_sample_emfs(sample_assignments, sample_id, evalue_cutoff = 0.98,
 \item{evalue_cutoff}{what value should be used to exclude EMFs? (default is 0.98)}
 
 \item{use_corroborating}{should other adducts be added for corroborating evidence (default is \code{TRUE})}
+
+\item{emf_classifications}{data.frame of classifications for isotopologue_EMFs}
 }
 \value{
 list
