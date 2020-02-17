@@ -66,37 +66,41 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
     # to find those instances
     n_adduct = purrr::map_dbl(emf_by_emf, nrow)
     emf_by_emf = emf_by_emf[n_adduct > 1]
-    multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
-      out_data = NULL
-      if (length(unique(x$adduct_IMF)) > 1) {
-        #emf_adducts = stringr::str_split_fixed(x$emf_Adduct, "\\.", 2)
+    if (length(emf_by_emf) > 0) {
+      multi_evidence_emf = purrr::map_df(emf_by_emf, function(x){
+        out_data = NULL
+        if (length(unique(x$adduct_IMF)) > 1) {
+          #emf_adducts = stringr::str_split_fixed(x$emf_Adduct, "\\.", 2)
 
-        if (sum(x$adduct_IMF %in% c("1H1", "14N1,1H4")) != length(x$adduct_IMF)) {
-          out_data = x
-          out_data
+          if (sum(x$adduct_IMF %in% c("1H1", "14N1,1H4")) != length(x$adduct_IMF)) {
+            out_data = x
+            out_data
+          }
         }
-      }
-      out_data
-    })
-
-    split_multi = split(multi_evidence_emf, multi_evidence_emf$isotopologue_EMF)
-    corroborating_evidence = internal_map$map_function(seq(1, length(split_multi)), function(in_split){
-      #message(in_split)
-      in_multi = split_multi[[in_split]]
-      gemf_evidence = purrr::map_df(seq(1, nrow(in_multi)), function(m_row){
-        other_data = in_multi[-m_row, , drop = FALSE]
-        other_evidence = dplyr::filter(sample_assignments, isotopologue_EMF %in% other_data$isotopologue_EMF,
-                                       grouped_EMF %in% other_data$grouped_EMF)
-        evidence_2 = dplyr::group_by(other_evidence, gc) %>% dplyr::slice(1) %>% dplyr::ungroup()
-        evidence_2$grouped_EMF = in_multi$grouped_EMF[m_row]
-        evidence_2$complete_EMF = in_multi$complete_EMF[m_row]
-        evidence_2$type = "secondary"
-        evidence_2
+        out_data
       })
-      gemf_evidence
-    })
-    corroborating_assignments = do.call(rbind, corroborating_evidence)
-    all_assignments = rbind(sample_assignments, corroborating_assignments)
+
+      split_multi = split(multi_evidence_emf, multi_evidence_emf$isotopologue_EMF)
+      corroborating_evidence = internal_map$map_function(seq(1, length(split_multi)), function(in_split){
+        #message(in_split)
+        in_multi = split_multi[[in_split]]
+        gemf_evidence = purrr::map_df(seq(1, nrow(in_multi)), function(m_row){
+          other_data = in_multi[-m_row, , drop = FALSE]
+          other_evidence = dplyr::filter(sample_assignments, isotopologue_EMF %in% other_data$isotopologue_EMF,
+                                         grouped_EMF %in% other_data$grouped_EMF)
+          evidence_2 = dplyr::group_by(other_evidence, gc) %>% dplyr::slice(1) %>% dplyr::ungroup()
+          evidence_2$grouped_EMF = in_multi$grouped_EMF[m_row]
+          evidence_2$complete_EMF = in_multi$complete_EMF[m_row]
+          evidence_2$type = "secondary"
+          evidence_2
+        })
+        gemf_evidence
+      })
+      corroborating_assignments = do.call(rbind, corroborating_evidence)
+      all_assignments = rbind(sample_assignments, corroborating_assignments)
+    } else {
+      all_assignments = sample_assignments
+    }
   } else {
     all_assignments = sample_assignments
   }
