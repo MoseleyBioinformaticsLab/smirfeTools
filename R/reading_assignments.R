@@ -7,14 +7,18 @@
 #' @param score_calculation how to calculate the score
 #' @param score_weight multiplier to apply to the scores (default = 1)
 #' @param filter_conditions how the data should be filtered
+#' @param high_correlation what is considered high correlation with scan
+#' @param emf_weight an optional data.frame of emf_weights
 #' @param remove_highsd should the high standard deviation peaks be removed
 #' @param remove_contaminants should peaks that were marked as contaminants be removed
 #'
+#' @seealso weight_lipid_classifications
 #' @export
 #' @return data.frame of assignments with scores added
 score_filter_assignments = function(assignments, score_calculation = 1 - e_value,
-                                       score_weight = 1, filter_conditions = ObservedMZ <= 1600,
+                                    score_weight = 1, filter_conditions = ObservedMZ <= 1600,
                                     high_correlation = 0.5,
+                                    emf_weight = NULL,
                                     remove_highsd = TRUE,
                                     remove_contaminants = TRUE){
   if (inherits(assignments, "character")) {
@@ -58,6 +62,13 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
     sample_assignments$emf.size = NULL
   }
 
+  # when a data.frame of *interesting* emfs is provided and a weighting, then the
+  # scores for those emfs are further modified with a weighting factor
+  if (!is.null(emf_weight)) {
+    sample_assignments = dplyr::left_join(sample_assignments, emf_weight, by = "isotopologue_EMF")
+    sample_assignments$weight[is.na(sample_assignments$weight)] = 1
+    sample_assignments$score = sample_assignments$score * sample_assignments$weight
+  }
   assignments$assignments = sample_assignments
   assignments
 }
