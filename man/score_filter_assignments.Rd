@@ -6,7 +6,7 @@
 \usage{
 score_filter_assignments(assignments, score_calculation = 1 - e_value,
   score_weight = 1, filter_conditions = ObservedMZ <= 1600,
-  high_correlation = 0.5, remove_highsd = TRUE,
+  high_correlation = 0.5, emf_weight = NULL, remove_highsd = TRUE,
   remove_contaminants = TRUE)
 }
 \arguments{
@@ -18,6 +18,10 @@ score_filter_assignments(assignments, score_calculation = 1 - e_value,
 
 \item{filter_conditions}{how the data should be filtered}
 
+\item{high_correlation}{what is considered high correlation with scan}
+
+\item{emf_weight}{an optional data.frame of emf_weights}
+
 \item{remove_highsd}{should the high standard deviation peaks be removed}
 
 \item{remove_contaminants}{should peaks that were marked as contaminants be removed}
@@ -28,4 +32,7 @@ data.frame of assignments with scores added
 \description{
 Given assignments (either a filename or list), calculate scores, and filter
 the assignments by M/Z
+}
+\seealso{
+weight_lipid_classifications
 }

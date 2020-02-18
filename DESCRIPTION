@@ -1,7 +1,7 @@
 Package: smirfeTools
 Type: Package
 Title: Tools to Work with SMIRFE Assignments
-Version: 0.0.8
+Version: 0.0.9
 Date: 2020-02-18
 Author: Robert M Flight
 Maintainer: Robert M Flight <rflight79@gmail.com>
