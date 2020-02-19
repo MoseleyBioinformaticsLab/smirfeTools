@@ -146,7 +146,7 @@ create_sudo_emfs = function(gemf_2_emf){
       adduct_iter = dplyr::left_join(emf_iter, gemf_2_emf, by = "complete_EMF") %>%
         dplyr::transmute(grouped_EMF = grouped_EMF.y, complete_EMF = complete_EMF) %>% unique()
     }
-
+    adduct_iter$sudo_EMF = paste0("SEMF_", i_sudo)
     sudo_emf_list[[i_sudo]] = adduct_iter
     gemf_2_emf = dplyr::filter(gemf_2_emf, !(grouped_EMF %in% adduct_iter$grouped_EMF))
     i_sudo = i_sudo + 1
@@ -154,7 +154,7 @@ create_sudo_emfs = function(gemf_2_emf){
 
   keep_sudo = purrr::map_lgl(sudo_emf_list, ~ !is.null(.x))
   sudo_emf_list = sudo_emf_list[keep_sudo]
-  names(sudo_emf_list) = paste0("SEMF_", seq(1, length(sudo_emf_list)))
+  names(sudo_emf_list) = purrr::map_chr(sudo_emf_list, ~ .x$sudo_EMF[1])
   sudo_emf_list
 
 }
