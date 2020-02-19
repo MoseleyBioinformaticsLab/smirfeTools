@@ -41,7 +41,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
       dplyr::select(isotopologue_EMF, cat2) %>%
       unique(.)
 
-    grouped_assignments = internal_map$map_function(grouped_assignments, function(in_assign){
+    grouped_assignments = purrr::map(grouped_assignments, function(in_assign){
       tmp_assign = unique(in_assign[, c("isotopologue_EMF"), drop = FALSE])
       tmp_assign = dplyr::left_join(tmp_assign, tmp_classifications, by = "isotopologue_EMF") %>%
         dplyr::filter(cat2 %in% "lipid")
@@ -81,7 +81,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
       })
 
       split_multi = split(multi_evidence_emf, multi_evidence_emf$isotopologue_EMF)
-      corroborating_evidence = internal_map$map_function(seq(1, length(split_multi)), function(in_split){
+      corroborating_evidence = purrr::map(seq(1, length(split_multi)), function(in_split){
         #message(in_split)
         in_multi = split_multi[[in_split]]
         gemf_evidence = purrr::map_df(seq(1, nrow(in_multi)), function(m_row){

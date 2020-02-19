@@ -277,7 +277,7 @@ extract_assigned_data <- function(assigned_data,
 
   names(assigned_data) = NULL
 
-  within_sample_emfs = purrr::map(assigned_data, function(.x){
+  within_sample_emfs = internal_map$map_function(assigned_data, function(.x){
     progress_msg = paste0("Sample: ", .x$sample)
     if (progress) {
       message(progress_msg)
