@@ -666,10 +666,10 @@ extract_emfs = function(chosen_emfs){
   null_sample_matrix = matrix(as.character(NA), nrow = 1, ncol = length(all_samples))
   colnames(null_sample_matrix) = all_samples
 
-  #all_emfs = internal_map$map_function(chosen_emfs, function(use_emf){
-  all_emfs = purrr::map(seq(1, length(chosen_emfs)), function(i_emf){
+  all_emfs = internal_map$map_function(chosen_emfs, function(peak_info){
+  #all_emfs = purrr::map(seq(1, length(chosen_emfs)), function(i_emf){
     #message(i_emf)
-    peak_info = chosen_emfs[[i_emf]]
+    #peak_info = chosen_emfs[[i_emf]]
 
     split_emf = split(peak_info, peak_info$complete_EMF)
 
