@@ -588,6 +588,7 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
   out_emfs = purrr::map(seq(1, length(out_emfs)), function(.x){
     tmp_emf = out_emfs[[.x]]
     tmp_emf$sudo_EMF = paste0("SEMF_", .x)
+    rownames(tmp_emf) = NULL
     tmp_emf
   })
   names(out_emfs) = paste0("SEMF_", seq(1, length(out_emfs)))
@@ -659,6 +660,7 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, pe
   all_chosen_emfs = purrr::map(seq(1, length(all_chosen_emfs)), function(.x){
     tmp_x = all_chosen_emfs[[.x]]
     tmp_x$sudo_EMF = paste0("SEMF_", .x)
+    rownames(tmp_x) = NULL
     tmp_x
   })
   names(all_chosen_emfs) = paste0("SEMF_", seq(1, length(all_chosen_emfs)))

@@ -344,11 +344,6 @@ extract_assigned_data <- function(assigned_data,
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
   merged_chosen_emfs = merged_chosen_emfs[!null_chosen2]
-  merged_chosen_emfs = purrr::imap(merged_chosen_emfs, function(.x, .y){
-    .x$sudo_EMF = .y
-    rownames(.x) = NULL
-    .x
-  })
 
   n_merged = length(merged_chosen_emfs)
   log_memory()
