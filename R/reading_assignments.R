@@ -318,6 +318,8 @@ extract_assigned_data <- function(assigned_data,
   match_name = names(peak_location) %in% difference_measure
   names(peak_location)[match_name] = "Value"
 
+  sudo_emf_list = sudo_emf_list[sample(length(sudo_emf_list), length(sudo_emf_list))]
+
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     #message(.x$sudo_EMF[1])
     choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio, .x$sudo_EMF[1])
