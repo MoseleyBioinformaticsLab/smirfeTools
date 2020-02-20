@@ -319,7 +319,8 @@ extract_assigned_data <- function(assigned_data,
   names(peak_location)[match_name] = "Value"
 
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
-    choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
+    #message(.x$sudo_EMF[1])
+    choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio, .x$sudo_EMF[1])
   })
   names(chosen_emfs) = names(sudo_emf_list)
   null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
