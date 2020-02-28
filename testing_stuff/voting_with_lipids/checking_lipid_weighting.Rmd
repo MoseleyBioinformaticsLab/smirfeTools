@@ -1,0 +1,156 @@
+---
+title: "Effects of Lipid EMF Weighting"
+author: "Robert M Flight"
+date: "`r Sys.time()`"
+output:
+  pdf_document:
+  toc: yes
+---
+
+```{r setup, echo=FALSE, include=FALSE}
+here_loc = here::here()
+data_loc = file.path(here_loc, "testing_stuff/voting_with_lipids")
+library(smirfeTools)
+library(ggplot2)
+library(dplyr)
+emf_classes = import_emf_classifications(file.path(data_loc, "all_emfs_2020-01-27_classified.json"))
+theme_set(cowplot::theme_cowplot())
+```
+
+## Purpose
+
+Lipid filtering seems to result in a lot more EMFs (likely due to splitting up EMFs that truly belong together), so we decided to try weighting the scores of lipids (and potentially metabolites) higher to see if we can increase their propensity in the final list of assigned EMFs.
+
+For each EMF, we will extract the set of EMFs assigned, and check how many are lipids.
+
+
+
+## Lipids Only
+
+We will first investigate the effect on weighting just lipids. 
+
+### Data
+
+```{r data}
+# assumes we are running in /mlab/scratch/rmflight/smirfeTools_data
+
+list_files = dir(data_loc, pattern = "rds", full.names = TRUE)
+
+use_files = c(list_files %>%
+  grep("lipid_.*.rds", ., value = TRUE) %>%
+  grep("metabolite", ., value = TRUE, invert = TRUE),
+  list_files %>% grep("nofilter", ., value = TRUE))
+
+filename_which = data.frame(file = use_files,
+                            stringsAsFactors = FALSE)
+filename_which = filename_which %>% dplyr::mutate(weight = gsub("lipid_", "", basename(file)) %>% gsub(".rds", "", .),
+                                                  base_file = basename(file))
+filename_which = dplyr::mutate(filename_which, weight2 = dplyr::case_when(
+  grepl("nofilter", weight) ~ 1,
+  TRUE ~ as.numeric(weight)
+))
+
+file_emfs = purrr::map(use_files, function(in_file){
+  tmp = readRDS(in_file)
+  tmp$emf_info
+})
+names(file_emfs) = basename(use_files)
+```
+
+### Check Number of Sudo EMFs
+
+Ideally, the number of EMFs found didn't change, or at least didn't change by much.
+
+```{r n_emf}
+n_emf = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
+    in_emf %>% 
+    dplyr::summarise(n_emf = length(unique(sudo_EMF))) %>%
+    dplyr::mutate(base_file = in_file)
+})
+n_emf = dplyr::left_join(filename_which, n_emf, by = "base_file")
+n_emf %>% dplyr::arrange(weight2)
+```
+
+### Check Number of Lipids in Each Sudo EMF
+
+```{r number_lipids}
+just_lipids = dplyr::filter(emf_classes, !(grepl("not_lipid", Categories))) %>%
+  dplyr::select(isotopologue_EMF) %>% unique(.)
+n_lipid = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
+  dplyr::group_by(in_emf, sudo_EMF) %>% 
+    dplyr::summarise(n_lipid = sum(unique(isotopologue_EMF) %in% just_lipids$isotopologue_EMF),
+                     n_iemf = length(unique(isotopologue_EMF))) %>%
+    dplyr::mutate(base_file = in_file)
+})
+n_lipid = dplyr::left_join(n_lipid, filename_which, by = "base_file")
+n_lipid = dplyr::mutate(n_lipid, fraction = n_lipid / n_iemf)
+
+
+
+ggplot(n_lipid, aes(x = fraction)) + geom_histogram(bins = 10) + facet_wrap(~ weight)
+```
+
+
+## Lipids Only
+
+We will first investigate the effect on weighting just lipids. 
+
+### Data
+
+```{r data}
+# assumes we are running in /mlab/scratch/rmflight/smirfeTools_data
+
+list_files = dir(".", pattern = "rds", full.names = TRUE)
+
+use_files = c(list_files %>%
+  grep("lipid_.*.rds", ., value = TRUE) %>%
+  grep("metabolite", ., value = TRUE),
+  list_files %>% grep("nofilter", ., value = TRUE))
+
+filename_which = data.frame(file = use_files,
+                            stringsAsFactors = FALSE)
+filename_which = filename_which %>% dplyr::mutate(weight = gsub("./lipid_", "", file) %>% gsub(".rds", "", .))
+filename_which = dplyr::mutate(filename_which, weight2 = dplyr::case_when(
+  grepl("nofilter", weight) ~ 1,
+  TRUE ~ as.numeric(weight)
+))
+
+file_emfs = purrr::map(use_files, function(in_file){
+  tmp = readRDS(in_file)
+  tmp$emf_info
+})
+names(file_emfs) = use_files
+```
+
+### Check Number of Sudo EMFs
+
+Ideally, the number of EMFs found didn't change, or at least didn't change by much.
+
+```{r n_emf}
+n_emf = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
+    in_emf %>% 
+    dplyr::summarise(n_emf = length(unique(sudo_EMF))) %>%
+    dplyr::mutate(file = in_file)
+})
+n_emf = dplyr::left_join(filename_which, n_emf, by = "file")
+n_emf %>% dplyr::arrange(weight2)
+```
+
+### Check Number of Lipids in Each Sudo EMF
+
+```{r number_lipids}
+just_lipids = dplyr::filter(emf_classes, !(grepl("not_lipid", Categories))) %>%
+  dplyr::select(isotopologue_EMF) %>% unique(.)
+n_lipid = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
+  dplyr::group_by(in_emf, sudo_EMF) %>% 
+    dplyr::summarise(n_lipid = sum(unique(isotopologue_EMF) %in% just_lipids$isotopologue_EMF),
+                     n_iemf = length(unique(isotopologue_EMF))) %>%
+    dplyr::mutate(file = in_file)
+})
+n_lipid = dplyr::left_join(n_lipid, filename_which, by = "file")
+n_lipid = dplyr::mutate(n_lipid, fraction = n_lipid / n_iemf)
+
+
+
+ggplot(n_lipid, aes(x = n_iemf, y = n_lipid)) + geom_histogram(bins = 10) + facet_wrap(~ weight)
+```
