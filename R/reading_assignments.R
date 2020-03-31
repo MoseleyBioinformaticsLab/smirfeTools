@@ -311,6 +311,8 @@ extract_assigned_data <- function(assigned_data,
   all_gemfs = unlist(within_sample_emfs, recursive = FALSE, use.names = FALSE)
   names(all_gemfs) = purrr::map_chr(all_gemfs, ~ .x$grouped_EMF[1])
 
+  n_gemf = length(all_gemfs)
+
   if (progress) {
     message("Choosing EMFs by voting ...")
   }
@@ -326,6 +328,8 @@ extract_assigned_data <- function(assigned_data,
   names(peak_location)[match_name] = "Value"
 
   sudo_emf_list = sudo_emf_list[sample(length(sudo_emf_list), length(sudo_emf_list))]
+
+  n_sudoemf = length(sudo_emf_list)
 
   chosen_emfs = internal_map$map_function(sudo_emf_list, function(.x){
     #message(.x$sudo_EMF[1])
@@ -378,11 +382,24 @@ extract_assigned_data <- function(assigned_data,
     message(time_message)
   }
   log_message(time_message)
+  n_emfs = data.frame(type = c(
+    "grouped",
+    "sudo",
+    "chosen",
+    "merged"
+  ),
+  number = c(
+    n_gemf,
+    n_sudoemf,
+    n_chosen,
+    n_merged
+  ),
+  stringsAsFactors = FALSE)
   return(list(emfs = extracted_location_intensity,
               emf_info = all_assignments,
               tic = get_tic(assigned_data),
-              n_emfs = list(chosen = n_chosen,
-                            merged = n_merged)))
+              n_emfs = n_emfs)
+  )
 }
 
 filter_peak_imfs <- function(peak_assignments, imf = "complete_IMF", e_value = "e_value"){
