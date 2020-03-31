@@ -38,7 +38,7 @@ list_files = dir(data_loc, pattern = "rds", full.names = TRUE)
 
 use_files = c(list_files %>%
   grep("lipid_.*.rds", ., value = TRUE) %>%
-  grep("metabolite", ., value = TRUE, invert = TRUE),
+  grep("metabolite|weights", ., value = TRUE, invert = TRUE),
   list_files %>% grep("nofilter", ., value = TRUE))
 
 filename_which = data.frame(file = use_files,
@@ -63,12 +63,11 @@ Ideally, the number of EMFs found didn't change, or at least didn't change by mu
 
 ```{r n_emf}
 n_emf = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
-    in_emf %>% 
-    dplyr::summarise(n_emf = length(unique(sudo_EMF))) %>%
+    dplyr::summarise(in_emf, n_emf = length(unique(sudo_EMF))) %>%
     dplyr::mutate(base_file = in_file)
 })
 n_emf = dplyr::left_join(filename_which, n_emf, by = "base_file")
-n_emf %>% dplyr::arrange(weight2)
+n_emf %>% dplyr::select(base_file, weight2, n_emf) %>% dplyr::arrange(weight2)
 ```
 
 ### Check Number of Lipids in Each Sudo EMF
@@ -85,31 +84,58 @@ n_lipid = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
 n_lipid = dplyr::left_join(n_lipid, filename_which, by = "base_file")
 n_lipid = dplyr::mutate(n_lipid, fraction = n_lipid / n_iemf)
 
+split_lipid = split(n_lipid, n_lipid$base_file)
+create_binned_fraction = function(in_fraction){
+  use_values = in_fraction$fraction
+  binned = hist(use_values, breaks = 10, plot = FALSE)
+  data.frame(fraction = binned$mids,
+             count = binned$counts,
+             weight = in_fraction$weight2[1],
+             base_file = in_fraction$base_file[1],
+             stringsAsFactors = FALSE)
+}
+n_lipid_fraction = purrr::map_df(split_lipid, create_binned_fraction)
 
+n_lipid_fraction2 = purrr::map_df(split(n_lipid_fraction, n_lipid_fraction$fraction), function(x){
+  x$count_frac = x$count / max(x$count)
+  x
+})
+```
 
-ggplot(n_lipid, aes(x = fraction)) + geom_histogram(bins = 10) + facet_wrap(~ weight)
+Let's look at the bar plots across all different weights.
+
+```{r plot_bar_all}
+ggplot(n_lipid, aes(x = fraction)) + geom_histogram(bins = 10) + 
+  facet_wrap(~ weight, ncol = 3)
+```
+
+Now we will concentrate on just the 0 bar and the 1 bar in the following graphs, plotting number of EMFs with that fraction.
+
+```{r plot_05_95}
+ggplot(dplyr::filter(n_lipid_fraction2, fraction %in% c(0.05, 0.95)), aes(x = weight, y = count)) + geom_point() + geom_line() + facet_wrap(~ fraction, ncol = 2, scales = "free_y") + ggtitle(label = "", subtitle = "Number of sudo_EMFs with X fraction of assignments\n as lipids by weighting applied")
+
+ggplot(dplyr::filter(n_lipid_fraction2, fraction %in% c(0.05, 0.95)), aes(x = weight, y = count_frac)) + geom_point() + geom_line() + facet_wrap(~ fraction, ncol = 2, scales = "free_y") + ggtitle(label = "", subtitle = "Number of sudo_EMFs with X fraction of assignments\n as lipids by weighting applied")
 ```
 
 
-## Lipids Only
+## Lipids & Metabolights
 
-We will first investigate the effect on weighting just lipids. 
+And then look at weighting both lipids and not_lipid.
 
 ### Data
 
-```{r data}
+```{r data2}
 # assumes we are running in /mlab/scratch/rmflight/smirfeTools_data
 
-list_files = dir(".", pattern = "rds", full.names = TRUE)
+list_files = dir(data_loc, pattern = "rds", full.names = TRUE)
 
-use_files = c(list_files %>%
-  grep("lipid_.*.rds", ., value = TRUE) %>%
-  grep("metabolite", ., value = TRUE),
-  list_files %>% grep("nofilter", ., value = TRUE))
+use_files = list_files %>%
+  grep("lipid_metabolite.*.rds", ., value = TRUE) 
 
 filename_which = data.frame(file = use_files,
                             stringsAsFactors = FALSE)
-filename_which = filename_which %>% dplyr::mutate(weight = gsub("./lipid_", "", file) %>% gsub(".rds", "", .))
+filename_which = filename_which %>% dplyr::mutate(weight = gsub("lipid_metabolite_", "", basename(file)) %>% gsub(".rds", "", .),
+                                                  base_file = basename(file))
 filename_which = dplyr::mutate(filename_which, weight2 = dplyr::case_when(
   grepl("nofilter", weight) ~ 1,
   TRUE ~ as.numeric(weight)
@@ -119,38 +145,74 @@ file_emfs = purrr::map(use_files, function(in_file){
   tmp = readRDS(in_file)
   tmp$emf_info
 })
-names(file_emfs) = use_files
+names(file_emfs) = basename(use_files)
 ```
 
 ### Check Number of Sudo EMFs
 
 Ideally, the number of EMFs found didn't change, or at least didn't change by much.
 
-```{r n_emf}
+```{r n_emf2}
 n_emf = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
     in_emf %>% 
     dplyr::summarise(n_emf = length(unique(sudo_EMF))) %>%
-    dplyr::mutate(file = in_file)
+    dplyr::mutate(base_file = in_file)
 })
-n_emf = dplyr::left_join(filename_which, n_emf, by = "file")
-n_emf %>% dplyr::arrange(weight2)
+n_emf = dplyr::left_join(filename_which, n_emf, by = "base_file")
+n_emf %>% dplyr::select(base_file, weight2, n_emf) %>% dplyr::arrange(weight2)
 ```
 
-### Check Number of Lipids in Each Sudo EMF
+### Check Number of Lipids and Metabolites (Not) in Each Sudo EMF
 
-```{r number_lipids}
-just_lipids = dplyr::filter(emf_classes, !(grepl("not_lipid", Categories))) %>%
-  dplyr::select(isotopologue_EMF) %>% unique(.)
-n_lipid = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
+```{r number_lipids2}
+just_not_lipid = dplyr::filter(emf_classes, (grepl("not_lipid", Categories))) %>%
+  dplyr::select(isotopologue_EMF) %>% unique(.) %>%
+  dplyr::filter(!(isotopologue_EMF %in% just_lipids$isotopologue_EMF))
+n_lipid_n_not = purrr::imap_dfr(file_emfs, function(in_emf, in_file){
   dplyr::group_by(in_emf, sudo_EMF) %>% 
     dplyr::summarise(n_lipid = sum(unique(isotopologue_EMF) %in% just_lipids$isotopologue_EMF),
+                     n_not = sum(unique(isotopologue_EMF) %in% just_not_lipid$isotopologue_EMF),
                      n_iemf = length(unique(isotopologue_EMF))) %>%
-    dplyr::mutate(file = in_file)
+    dplyr::mutate(base_file = in_file)
 })
-n_lipid = dplyr::left_join(n_lipid, filename_which, by = "file")
-n_lipid = dplyr::mutate(n_lipid, fraction = n_lipid / n_iemf)
+n_lipid_n_not = dplyr::left_join(n_lipid_n_not, filename_which, by = "base_file")
+n_lipid_n_not = dplyr::mutate(n_lipid_n_not, lipid_fraction = n_lipid / n_iemf,
+                              not_fraction = n_not / n_iemf)
 
+create_binned_fraction2 = function(in_fraction){
+  binned_lipid = hist(in_fraction$lipid_fraction, breaks = 10, plot = FALSE)
+  binned_not = hist(in_fraction$not_fraction, breaks = 10, plot = FALSE)
+  
+  data.frame(fraction = binned_lipid$mids,
+             count = binned_lipid$counts,
+             not = binned_not$counts,
+             weight = in_fraction$weight2[1],
+             base_file = in_fraction$base_file[1],
+             stringsAsFactors = FALSE)
+}
 
+n_lipid_not_fraction = purrr::map_df(split(n_lipid_n_not, n_lipid_n_not$base_file), create_binned_fraction2)
 
-ggplot(n_lipid, aes(x = n_iemf, y = n_lipid)) + geom_histogram(bins = 10) + facet_wrap(~ weight)
+n_lipid_not_fraction2 = purrr::map_df(split(n_lipid_not_fraction, n_lipid_not_fraction$fraction), function(x){
+  x$count_frac = x$count / max(x$count)
+  x$not_frac = x$not / max(x$not)
+  x
+})
+
+ggplot(dplyr::filter(n_lipid_not_fraction2, fraction %in% c(0.05, 0.95)), aes(x = weight, y = count)) + geom_point() + geom_line() + facet_wrap(~ fraction, ncol = 2, scales = "free_y") + ggtitle(label = "", subtitle = "Number of sudo_EMFs with X fraction of assignments\n as lipids by weighting applied")
+
+ggplot(dplyr::filter(n_lipid_not_fraction2, fraction %in% c(0.05, 0.95)), aes(x = weight, y = not)) + geom_point() + geom_line() + facet_wrap(~ fraction, ncol = 2, scales = "free_y") + ggtitle(label = "", subtitle = "Number of sudo_EMFs with X fraction of assignments\n as metabolites by weighting applied")
+
+lipid_95 = dplyr::filter(n_lipid_fraction2, fraction %in% 0.95) %>% 
+  dplyr::select(count, fraction, weight) %>%
+  dplyr::mutate(type = "lipid_only")
+lipid_not_95 = dplyr::filter(n_lipid_not_fraction2, fraction %in% 0.95) %>%
+  dplyr::select(count, fraction, weight) %>%
+  dplyr::mutate(type = "lipid_metabolite")
+
+lipid_compare = rbind(lipid_95, lipid_not_95)
+ggplot(lipid_compare, aes(x = weight, y = count, color = type)) + geom_point() + 
+  geom_line() + labs(subtitle = "Comparison of # of Lipids Weighting Lipids\n or Lipids & Metabolites", caption = "This compares the number of sudo_EMFs that have 100% of their assignments as a lipid\n with different weights applied to either just the lipid or lipid and metabolites weighted scores.") +
+  theme(legend.position = c(0.8, 0.1))
+
 ```
