@@ -5,7 +5,7 @@
 \title{choose most likely elemental molecular formula's}
 \usage{
 choose_emf(grouped_emfs, scan_level_location, peak_location,
-  difference_cutoff, keep_ratio = 0.9)
+  difference_cutoff, keep_ratio = 0.9, sudo_EMF = NULL)
 }
 \arguments{
 \item{grouped_emfs}{list of grouped EMFs}
@@ -15,6 +15,8 @@ choose_emf(grouped_emfs, scan_level_location, peak_location,
 \item{difference_cutoff}{how close do peaks need to be to each other}
 
 \item{keep_ratio}{how close to the maximum voted EMF to keep other things? (default is 0.9)}
+
+\item{sudo_EMF}{is there a sudo_EMF id we can set?}
 }
 \value{
 data.frame
