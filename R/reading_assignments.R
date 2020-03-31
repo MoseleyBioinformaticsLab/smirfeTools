@@ -99,11 +99,14 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
     sample <- tmp_list$Sample
   }
 
+  n_peaks = length(tmp_list$Peaks)
+
   if (!assigned_only) {
     to_extract = rep(TRUE, length(tmp_list$Peaks))
   } else {
     to_extract <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
   }
+  n_extract = sum(to_extract)
 
   #tictoc::tic()
   extract_list = which(to_extract)
@@ -141,7 +144,11 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb 
        assignments = peak_assignments,
        data = peak_data,
        scan_level = scan_level_lists,
-       sample = sample)
+       sample = sample,
+       peaks = data.frame(sample = sample,
+                          n_json = n_peaks,
+                          n_extracted = n_extract,
+                          stringsAsFactors = FALSE))
 }
 
 get_tic <- function(assigned_data){
