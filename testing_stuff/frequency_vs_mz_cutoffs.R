@@ -26,6 +26,7 @@ all_emfs = unique(unlist(purrr::map(assigned_data, ~ .x$assignments$isotopologue
 
 zip_files <- dir("/mlab/scratch/cesb_data/zip_files/lung_matched_tissue-2020-01-27",
                  full.names = TRUE, pattern = ".zip$")
+json_files = gsub(".zip$", ".json", zip_files)
 all_coefficients = extract_coefficient_data(zip_files)
 
 names(all_coefficients) = purrr::map_chr(all_coefficients, "sample")
@@ -39,6 +40,7 @@ coefficient_df = purrr::map_df(all_coefficients, function(in_sample){
 saveRDS(coefficient_df, file = "lung_sqrt_coefficients.rds")
 coefficient_cluster = kmeans(coefficient_df$sqrt, 3)
 coefficient_df$cluster = coefficient_cluster$cluster
+dplyr::group_by(coefficient_df, cluster) %>% dplyr::summarize(n = dplyr::n())
 
 coefficients_by_cluster = split(coefficient_df, coefficient_df$cluster)
 
@@ -231,3 +233,110 @@ coefficient_info = all_coefficients[use_coefficients$sample]
 assigned_info = assigned_data[use_coefficients$sample]
 
 new_diff = create_mz_diffs_frequency(coefficient_info, freq_sd, cluster_assigned)
+
+# Looking at low m/z frequency SDs using all the samples by cluster -----
+# It turns out, that as soon as we have EMFs *across* clusters, the SD's in
+# frequency space jump up drastically. It also turns out, that you can't move
+# the peaks in frequency space at all by recomputing their location in frequency
+# using a single model of M/Z to frequency. All of the points move by 1e-4 or 1e-5,
+# which does not fix SDs on the order of 10 to 100.
+#
+# So, next possible steps:
+# 1 - Combine within cluster SDs to find the actual SD, and then convert to M/Z
+# 2 - We know that frequency can model the offset in M/Z quite well (need to check error),
+#   can we use the relative change in M/Z by frequency, and the SD vs 0.5 offset ratio
+#   to inflate the M/Z cutoff slightly?
+# 3 - Worst case, do frequency SD in one group, work out the *actual* cutoff in M/Z,
+#   and then use this M/Z cutoff across groups?
+devtools::load_all("~/Projects/work/smirfeTools")
+library(ggplot2)
+library(dplyr)
+assigned_data = readRDS("testing_stuff/lung_assigned_all.rds")
+all_json = readRDS("testing_stuff/lung_json_all.rds")
+coefficient_df = readRDS("testing_stuff/lung_sqrt_coefficients.rds")
+
+coefficient_df = dplyr::mutate(coefficient_df, cluster =
+                                 dplyr::case_when(
+                                   sqrt < 29800000 ~ 1,
+                                   dplyr::between(sqrt, 29802000, 29802600) ~ 2,
+                                   sqrt > 29802600 ~ 3
+                                 ))
+
+all_freq_models = purrr::map(all_json, ~ .x$peak$frequency_mz$frequency_coefficients)
+use_freq_model = all_freq_models[[1]]
+freq_description = all_json[[1]]$peak$frequency_mz$frequency_fit_description
+
+assigned_data2 = assigned_data
+is_equal = purrr::map(assigned_data, function(.x){
+  purrr::map(names(.x$scan_level$ObservedMZ), function(in_peak){
+    old_freq = .x$scan_level$ObservedFrequency[[in_peak]]
+    new_freq = FTMS.peakCharacterization:::predict_exponentials(.x$scan_level$ObservedMZ[[in_peak]], use_freq_model, freq_description)
+    all.equal(old_freq, new_freq)
+  })
+})
+
+
+low_evalue_cutoff = 0.1
+low_mz_cutoff = 500
+remove_elements = "S"
+
+  scan_level_frequency = purrr::map(assigned_data, ~ .x$scan_level$ObservedFrequency)
+  scan_level_names = unlist(purrr::map(scan_level_frequency, ~ names(.x)))
+  scan_level_frequency = unlist(scan_level_frequency, recursive = FALSE, use.names = FALSE)
+  names(scan_level_frequency) = scan_level_names
+
+  sample_peak = purrr::map_df(assigned_data, ~ unique(.x$data[, c("Sample", "Sample_Peak")]))
+
+  confident_emfs = purrr::map(assigned_data, function(in_assign){
+    assignments = in_assign$assignments
+    #message(paste0(in_assign, "  ", .x$sample))
+    low_e_mz = dplyr::filter(assignments, (e_value <= low_evalue_cutoff) &
+                               (ObservedMZ <= low_mz_cutoff) & (!grepl("S", complete_EMF)))
+
+    if (length(unique(low_e_mz$Sample_Peak)) >= 20) {
+      return(get_sample_emfs(low_e_mz, in_assign$sample, evalue_cutoff = low_evalue_cutoff, use_corroborating = FALSE))
+    } else {
+      return(NULL)
+    }
+
+  })
+
+  confident_emfs = confident_emfs[!purrr::map_lgl(confident_emfs, is.null)]
+  confident_gemf_emf_mapping = internal_map$map_function(confident_emfs, function(x){
+    purrr::map_df(x, ~ unique(dplyr::select(.x, grouped_EMF, complete_EMF)))
+  })
+  confident_gemf_emf_mapping = do.call(rbind, confident_gemf_emf_mapping)
+
+  confident_sudo_emfs = create_sudo_emfs(confident_gemf_emf_mapping)
+
+  n_emf_confident = purrr::map_int(confident_sudo_emfs, ~length(unique(.x$grouped_EMF)))
+  confident_sudo_emfs = confident_sudo_emfs[n_emf_confident > 1]
+  confident_all_gemfs = unlist(confident_emfs, recursive = FALSE, use.names = FALSE)
+  names(confident_all_gemfs) = purrr::map_chr(confident_all_gemfs, ~ .x$grouped_EMF[1])
+
+  # sd_information = internal_map$map_function(confident_sudo_emfs, function(in_sudo){
+  #   calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
+  # })
+
+  sd_information = internal_map$map_function(names(confident_sudo_emfs), function(sudo_id){
+    #message(sudo_id)
+    "!DEBUG `sudo_id`"
+    in_sudo = confident_sudo_emfs[[sudo_id]]
+    calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
+  })
+  names(sd_information) = names(confident_sudo_emfs)
+
+  sd_df = purrr::imap_dfr(sd_information, function(.x, .y){
+    data.frame(semf = .y, sd = .x, stringsAsFactors = FALSE)
+  })
+
+semf_ncluster = purrr::map_df(confident_sudo_emfs, function(.x){
+  in_samples = strsplit(.x$grouped_EMF, ".", fixed = TRUE) %>% purrr::map_chr(., ~ .x[2]) %>% unique(.)
+  tmp_cluster = dplyr::filter(coefficient_df, sample %in% in_samples)
+  n_cluster = length(unique(tmp_cluster$cluster))
+  data.frame(semf = .x$sudo_EMF[1], n_sample = length(in_samples), n_cluster = n_cluster, stringsAsFactors = FALSE)
+})
+
+sd_df = dplyr::left_join(sd_df, semf_ncluster, by = "semf")
+
+ggplot(sd_df, aes(x = sd)) + geom_histogram(bins = 100) + facet_wrap(~ n_cluster, ncol = 1)
