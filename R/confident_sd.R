@@ -59,6 +59,7 @@ find_confident_frequency_sd = function(assigned_data,
     in_sudo = confident_sudo_emfs[[sudo_id]]
     calculate_confident_sd(confident_all_gemfs[unique(in_sudo$grouped_EMF)], scan_level_frequency, sample_peak)
   })
+  names(sd_information) = names(confident_sudo_emfs)
 
   sd_df = purrr::imap_dfr(sd_information, function(.x, .y){
     data.frame(semf = .y, sd = .x, stringsAsFactors = FALSE)
