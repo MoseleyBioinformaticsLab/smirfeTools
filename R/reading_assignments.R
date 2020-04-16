@@ -268,12 +268,20 @@ extract_assigned_data <- function(assigned_data,
 
   if (!use_scan_level) {
     warning("use_scan_level is FALSE, not using scan information!")
+    scan_level_data = NULL
     scan_level_location = NULL
   } else {
-    scan_level_location = purrr::map(assigned_data, ~ .x$scan_level[[difference_measure]])
-    scan_level_names = unlist(purrr::map(scan_level_location, ~ names(.x)))
-    scan_level_location = unlist(scan_level_location, recursive = FALSE, use.names = FALSE)
-    names(scan_level_location) = scan_level_names
+    scan_level_vars = names(assigned_data[[1]]$scan_level)
+
+    scan_level_data = purrr::map(scan_level_vars, function(in_var){
+      tmp_scan = purrr::map(assigned_data, ~ .x$scan_level[[in_var]])
+      tmp_names = unlist(purrr::map(tmp_scan, ~ names(.x)))
+      tmp_scan2 = unlist(tmp_scan, recursive = FALSE, use.names = FALSE)
+      names(tmp_scan2) = tmp_names
+      tmp_scan2
+    })
+    names(scan_level_data) = scan_level_vars
+    scan_level_location = scan_level_data[[difference_measure]]
   }
 
   start_time = Sys.time()
@@ -370,8 +378,17 @@ extract_assigned_data <- function(assigned_data,
   peak_data = purrr::map_df(assigned_data, ~ .x$data)
   peak_data = dplyr::filter(peak_data, Sample_Peak %in% all_peaks$Sample_Peak)
 
-  extracted_location_intensity = add_location_intensity(extracted_emfs, peak_data,
-                                                        ObservedMZ, Height)
+  if (!is.null(scan_level_data)) {
+    scan_level_data2 = purrr::map(scan_level_data, function(.x){
+      .x[all_peaks$Sample_Peak]
+    })
+
+  } else {
+    scan_level_data2 = NULL
+  }
+
+  # extracted_location_intensity = add_location_intensity(extracted_emfs, peak_data,
+  #                                                       ObservedMZ, Height)
 
   all_assignments = purrr::map_df(merged_chosen_emfs, ~ .x)
 
@@ -395,8 +412,10 @@ extract_assigned_data <- function(assigned_data,
     n_merged
   ),
   stringsAsFactors = FALSE)
-  return(list(emfs = extracted_location_intensity,
+  return(list(emfs = extracted_emfs,
               emf_info = all_assignments,
+              peak_data = peak_data,
+              scan_level = scan_level_data2,
               tic = get_tic(assigned_data),
               n_emfs = n_emfs)
   )

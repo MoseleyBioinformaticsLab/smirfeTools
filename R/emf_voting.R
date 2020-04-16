@@ -836,8 +836,11 @@ add_location_intensity = function(emfs, peak_data, location = ObservedMZ,
 #'
 #' Extract either IMF or EMF level data from the extracted EMFs. Which is controlled by the `by` argument.
 #'
-#' @param emfs list of EMFs
+#' @param extracted_emfs list of data from `extract_assigned_data`
+#' @param intensity which intensity measure should be used?
+#' @param location which location should be used?
 #' @param by `EMF` (default) or `IMF`
+#' @param scanlevel include scan level data as well? (default is FALSE)
 #'
 #' @details For `EMF`, will be a list corresponding to each EMF from the sudo EMFs, for `IMF`, will be
 #'  matrices and a data.frame.
@@ -845,19 +848,44 @@ add_location_intensity = function(emfs, peak_data, location = ObservedMZ,
 #' @return list with `intensity`, `location`, and `info`
 #' @export
 #'
-extract_imf_emf_data = function(emfs, by = "EMF"){
-  all_compared = internal_map$map_function(emfs, compare_extract_emfs, by = by)
+extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = ObservedMZ, by = "EMF", scanlevel = FALSE){
+  all_compared = internal_map$map_function(extracted_emfs$emfs, compare_extract_emfs, by = by)
 
   if (is.null(names(all_compared))) {
     names(all_compared) = paste0("SEMF_", seq_along(all_compared))
   }
 
+  peak_data = dplyr::mutate(extracted_emfs$peak_data, location = {{location}}, intensity = {{intensity}})
+  peak_location = peak_data[["location"]]
+  names(peak_location) = peak_data[["Sample_Peak"]]
+  sorted_names = sort(names(peak_location))
+  peak_location = peak_location[sorted_names]
+  peak_intensity = peak_data[["intensity"]]
+  names(peak_intensity) = peak_data[["Sample_Peak"]]
+  peak_intensity = peak_intensity[sorted_names]
+
+  if (scanlevel) {
+    scan_location = extracted_emfs$scan_level[[as.character(location)]]
+    intensity_var = as.character(intensity)
+    if (intensity_var %in% names(extracted_emfs$scan_level)) {
+      scan_intensity = extracted_emfs$scan_level[[intensity_var]]
+    } else {
+      scan_intensity = NULL
+    }
+  }
+
+
   if ("EMF" %in% by) {
     all_intensity = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
       semf_intensity = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
         peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
-        out_intensity = in_emf$intensity
+        emf_peaks = in_emf$peaks
+        out_intensity = purrr::map(seq(1, nrow(emf_peaks)), function(.x){
+          peak_intensity[emf_peaks[.x, ]]
+        }) %>%
+          do.call(rbind, .)
         rownames(out_intensity) = peak_id
+        colnames(out_intensity) = colnames(emf_peaks)
         out_intensity
       })
       names(semf_intensity) = paste0(semf_id, ".", names(in_semf))
@@ -868,8 +896,13 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
     all_location = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
       semf_location = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
         peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
-        out_location = in_emf$location
+        emf_peaks = in_emf$peaks
+        out_location = purrr::map(seq(1, nrow(emf_peaks)), function(.x){
+          peak_location[emf_peaks[.x, ]]
+        }) %>%
+          do.call(rbind, .)
         rownames(out_location) = peak_id
+        colnames(out_location) = colnames(emf_peaks)
         out_location
       })
       names(semf_location) = paste0(semf_id, ".", names(in_semf))
@@ -891,21 +924,60 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
       semf_info
     }) %>% purrr::flatten()
 
+    if (scanlevel) {
+      all_peaks = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+        semf_peaks = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+          peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
+          emf_peaks = in_emf$peaks
+          rownames(emf_peaks) = peak_id
+          emf_peaks
+        })
+        names(semf_peaks) = paste0(semf_id, ".", names(in_semf))
+        semf_peaks
+      }) %>% purrr::flatten() %>%
+        do.call(rbind, .)
+
+      scan_level_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+        row_peaks = all_peaks[in_row, ]
+        row_peaks = row_peaks[!is.na(row_peaks)]
+        unlist(scan_location[row_peaks], use.names = FALSE)
+      })
+      names(scan_level_location) = rownames(all_peaks)
+
+      if (!is.null(scan_intensity)) {
+        scan_level_intensity = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+          row_peaks = all_peaks[in_row, ]
+          row_peaks = row_peaks[!is.na(row_peaks)]
+          unlist(scan_intensity[row_peaks], use.names = FALSE)
+        })
+        names(scan_level_intensity) = rownames(all_peaks)
+      } else {
+        scan_level_intensity = NULL
+      }
+    }
+
   } else {
-    all_intensity = purrr::map2(all_compared, names(all_compared), function(.x, .y){
-      peak_id = paste0(.y,".", names(.x$info))
-      out_intensity = .x$intensity
-      n_intensity = nrow(out_intensity)
-      #message(paste0(.y, " ", n_height))
-      rownames(out_intensity) = peak_id
-      out_intensity
-    }) %>% do.call(rbind, .)
-    all_location = purrr::map2(all_compared, names(all_compared), function(.x, .y){
-      peak_id = paste0(.y,".", names(.x$info))
-      out_location = .x$location
-      rownames(out_location) = peak_id
-      out_location
-    }) %>% do.call(rbind, .)
+    # this should be to generate the flattened peak matrix, and then go through each
+    # non-na entry and replace it with the value from the intensity. This should
+    # be a function that can be done on the whole for IMFs, or for each piecewise EMF
+    all_peaks = purrr::map2(all_compared, names(all_compared), function(.x, .y){
+      peak_id = paste0(.y, ".", names(.x$info))
+      peak_matrix = .x$peaks
+      rownames(peak_matrix) = peak_id
+      peak_matrix
+    }) %>%
+      do.call(rbind, .)
+
+    matrix_intensity = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+      peak_intensity[all_peaks[in_row, ]]
+    }) %>%
+      do.call(rbind, .)
+    matrix_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+      peak_location[all_peaks[in_row, ]]
+    }) %>%
+      do.call(rbind, .)
+    rownames(matrix_locations) = rownames(matrix_intensity) = rownames(all_peaks)
+    colnames(matrix_locations) = colnames(matrix_intensity) = colnames(all_peaks)
     all_info = purrr::map2_dfr(all_compared, names(all_compared), function(.x, .y){
       peak_id = paste0(.y,".", names(.x$info))
       info = .x$info
@@ -917,10 +989,38 @@ extract_imf_emf_data = function(emfs, by = "EMF"){
       })
       info_df
     })
+    if (scanlevel) {
+      scan_level_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+        row_peaks = all_peaks[in_row, ]
+        row_peaks = row_peaks[!is.na(row_peaks)]
+        unlist(scan_location[row_peaks], use.names = FALSE)
+      })
+      names(scan_level_location) = rownames(all_peaks)
+
+      if (!is.null(scan_intensity)) {
+        scan_level_intensity = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+          row_peaks = all_peaks[in_row, ]
+          row_peaks = row_peaks[!is.na(row_peaks)]
+          unlist(scan_intensity[row_peaks], use.names = FALSE)
+        })
+        names(scan_level_intensity) = rownames(all_peaks)
+      } else {
+        scan_level_intensity = NULL
+      }
+    }
   }
-  return(list(intensity = all_intensity,
-              location = all_location,
-              info = all_info))
+  base_results = list(intensity = matrix_intensity,
+                      location = matrix_location,
+                      params = data.frame(parameter = c("location", "intensity"),
+                                          value = c(as.character(location),
+                                                    as.character(intensity)),
+                                          stringsAsFactors = FALSE),
+                      info = all_info)
+  if (scanlevel) {
+    base_results$scanlevel_intensity = scanlevel_intensity
+    base_results$scanlevel_location = scanlevel_location
+  }
+  return(base_results)
 }
 
 compare_extract_emfs = function(emf, by = "EMF"){
@@ -930,19 +1030,16 @@ compare_extract_emfs = function(emf, by = "EMF"){
     names(split_groups) = paste0("IMF_", seq_along(split_groups))
     single_index = purrr::map_df(split_groups, ~ .x[1, ])
 
-    out_intensity = compare_intensity[single_index$row_index, , drop = FALSE]
-    out_location = compare_location[single_index$row_index, , drop = FALSE]
-
+    out_peaks = compare_corresponded[single_index$row_index, , drop = FALSE]
     out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
 
-    list(intensity = out_intensity, location = out_location, info = out_info)
+    list(peaks = out_peaks, info = out_info)
   }
 
-  compare_intensity = purrr::map(emf, ~ .x$intensity) %>% do.call(rbind, .)
+  compare_corresponded = purrr::map(emf, ~ .x$corresponded_matrix) %>% do.call(rbind, .)
   compare_info = purrr::map_df(emf, ~ .x$peak_info)
-  compare_location = purrr::map(emf, ~ .x$location) %>% do.call(rbind, .)
 
-  group_imfs = vector("integer", length = nrow(compare_intensity))
+  group_imfs = vector("integer", length = nrow(compare_corresponded))
 
   i_group = 1
   while (sum(group_imfs == 0) > 0) {
@@ -950,7 +1047,7 @@ compare_extract_emfs = function(emf, by = "EMF"){
     master_loc = which(group_imfs == 0)[1]
 
     for (iloc in zero_locs) {
-      if (isTRUE(all.equal(compare_intensity[master_loc, ], compare_intensity[iloc, ]))) {
+      if (isTRUE(all.equal(compare_corresponded[master_loc, ], compare_corresponded[iloc, ]))) {
         group_imfs[iloc] = i_group
       }
     }
