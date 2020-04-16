@@ -849,6 +849,11 @@ add_location_intensity = function(emfs, peak_data, location = ObservedMZ,
 #' @export
 #'
 extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = ObservedMZ, by = "EMF", scanlevel = FALSE){
+  location_var = rlang::quo_name(enquo(location))
+  intensity_var = rlang::quo_name(enquo(intensity))
+  #message(location_var)
+  #message(intensity_var)
+
   all_compared = internal_map$map_function(extracted_emfs$emfs, compare_extract_emfs, by = by)
 
   if (is.null(names(all_compared))) {
@@ -864,9 +869,9 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
   names(peak_intensity) = peak_data[["Sample_Peak"]]
   peak_intensity = peak_intensity[sorted_names]
 
+
   if (scanlevel) {
-    scan_location = extracted_emfs$scan_level[[as.character(location)]]
-    intensity_var = as.character(intensity)
+    scan_location = extracted_emfs$scan_level[[location_var]]
     if (intensity_var %in% names(extracted_emfs$scan_level)) {
       scan_intensity = extracted_emfs$scan_level[[intensity_var]]
     } else {
@@ -968,16 +973,16 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
     }) %>%
       do.call(rbind, .)
 
-    matrix_intensity = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+    all_intensity = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
       peak_intensity[all_peaks[in_row, ]]
     }) %>%
       do.call(rbind, .)
-    matrix_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
+    all_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
       peak_location[all_peaks[in_row, ]]
     }) %>%
       do.call(rbind, .)
-    rownames(matrix_locations) = rownames(matrix_intensity) = rownames(all_peaks)
-    colnames(matrix_locations) = colnames(matrix_intensity) = colnames(all_peaks)
+    rownames(all_location) = rownames(all_intensity) = rownames(all_peaks)
+    colnames(all_location) = colnames(all_intensity) = colnames(all_peaks)
     all_info = purrr::map2_dfr(all_compared, names(all_compared), function(.x, .y){
       peak_id = paste0(.y,".", names(.x$info))
       info = .x$info
@@ -1009,16 +1014,16 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
       }
     }
   }
-  base_results = list(intensity = matrix_intensity,
-                      location = matrix_location,
+  base_results = list(intensity = all_intensity,
+                      location = all_location,
                       params = data.frame(parameter = c("location", "intensity"),
-                                          value = c(as.character(location),
-                                                    as.character(intensity)),
+                                          value = c(location_var,
+                                                    intensity_var),
                                           stringsAsFactors = FALSE),
                       info = all_info)
   if (scanlevel) {
-    base_results$scanlevel_intensity = scanlevel_intensity
-    base_results$scanlevel_location = scanlevel_location
+    base_results$scanlevel_intensity = scan_level_intensity
+    base_results$scanlevel_location = scan_level_location
   }
   return(base_results)
 }

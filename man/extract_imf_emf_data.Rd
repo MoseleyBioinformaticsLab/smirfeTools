@@ -4,12 +4,19 @@
 \alias{extract_imf_emf_data}
 \title{extract IMF or EMF level data}
 \usage{
-extract_imf_emf_data(emfs, by = "EMF")
+extract_imf_emf_data(extracted_emfs, intensity = Height,
+  location = ObservedMZ, by = "EMF", scanlevel = FALSE)
 }
 \arguments{
-\item{emfs}{list of EMFs}
+\item{extracted_emfs}{list of data from \code{extract_assigned_data}}
+
+\item{intensity}{which intensity measure should be used?}
+
+\item{location}{which location should be used?}
 
 \item{by}{\code{EMF} (default) or \code{IMF}}
+
+\item{scanlevel}{include scan level data as well? (default is FALSE)}
 }
 \value{
 list with \code{intensity}, \code{location}, and \code{info}
