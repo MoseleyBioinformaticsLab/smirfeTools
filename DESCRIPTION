@@ -1,7 +1,7 @@
 Package: smirfeTools
 Type: Package
 Title: Tools to Work with SMIRFE Assignments
-Version: 0.0.27
+Version: 0.0.28
 Date: 2020-04-22
 Author: Robert M Flight
 Maintainer: Robert M Flight <rflight79@gmail.com>
@@ -15,4 +15,4 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 6.1.1
 Suggests: knitr, rmarkdown, testthat, logger
 VignetteBuilder: knitr
-Imports: dplyr, purrr, magrittr
+Imports: dplyr, purrr, magrittr, mgcv
