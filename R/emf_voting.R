@@ -929,18 +929,20 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
       semf_info
     }) %>% purrr::flatten()
 
+    all_peaks = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_peaks = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
+        emf_peaks = in_emf$peaks
+        rownames(emf_peaks) = peak_id
+        emf_peaks
+      })
+      names(semf_peaks) = paste0(semf_id, ".", names(in_semf))
+      semf_peaks
+    }) %>% purrr::flatten() %>%
+      do.call(rbind, .)
+
     if (scanlevel) {
-      all_peaks = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
-        semf_peaks = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
-          peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
-          emf_peaks = in_emf$peaks
-          rownames(emf_peaks) = peak_id
-          emf_peaks
-        })
-        names(semf_peaks) = paste0(semf_id, ".", names(in_semf))
-        semf_peaks
-      }) %>% purrr::flatten() %>%
-        do.call(rbind, .)
+
 
       scan_level_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
         row_peaks = all_peaks[in_row, ]
@@ -1016,6 +1018,7 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
   }
   base_results = list(intensity = all_intensity,
                       location = all_location,
+                      peaks = all_peaks,
                       params = data.frame(parameter = c("location", "intensity"),
                                           value = c(location_var,
                                                     intensity_var),
