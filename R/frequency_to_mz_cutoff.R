@@ -62,14 +62,22 @@ grouped_mz_after_freq = function(grouped_samples, freq_cutoff){
 fit_predict_mz_cutoff = function(mz_sd, multiplier = 2, step_size = 0.5){
   fit_mz = mgcv::gam(Value ~ s(Index, bs = "cs"), data = mz_sd)
 
-  use_cutoff = data.frame(Index = seq(floor(min(fit_mz$Index)),
-                                      ceiling(max(fit_mz$Index)),
+  use_cutoff = data.frame(Index = seq(floor(min(mz_sd$Index)),
+                                      ceiling(max(mz_sd$Index)),
                                       step_size))
-  use_cutoff$Value = predict(use_cutoff, fit_mz) * multiplier
+  use_cutoff$Value = predict(fit_mz, use_cutoff) * multiplier
   use_cutoff
 }
 
-mode_function = function(values){
+#' calculate mode
+#'
+#' Calculates the mode of a set of values
+#'
+#' @param values the values you want the first primary mode of
+#'
+#' @export
+#' @return numeric
+calculate_mode = function(values){
   density_estimate = stats::density(values)
   mode_value = density_estimate$x[which.max(density_estimate$y)]
   mode_value
@@ -82,8 +90,12 @@ mode_function = function(values){
 #'
 #' @param grouped_samples list of `assigned_data`
 #' @param ... parameters for `find_confident_frequency_sd`
+#'
+#' @export
+#' @return data.frame
 sd_by_group = function(grouped_samples, ...){
   purrr::imap_dfr(grouped_samples, function(in_group, group_id){
+    message("Running next set ...")
     tmp_sd = find_confident_frequency_sd(in_group, ...)
     tmp_sd$group = group_id
     tmp_sd
