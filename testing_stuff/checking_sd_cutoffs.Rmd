@@ -1,0 +1,65 @@
+---
+title: "Checking SD Cutoffs"
+author: "Robert M Flight"
+date: "`r Sys.time()`"
+output: 
+  pdf_document: 
+    toc: yes
+---
+
+```{r setup}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+
+# Example Workflow Across 3 Groups
+library(smirfeTools)
+library(ggplot2)
+library(dplyr)
+library(furrr)
+library(metabolomicsUtilities)
+theme_set(cowplot::theme_cowplot())
+plan(multiprocess)
+set_internal_map(furrr::future_map)
+options(future.globals.maxSize = 800 * 1024 ^ 2)
+assigned_data = readRDS("testing_stuff/lung_assigned_all.rds")
+all_json = readRDS("testing_stuff/lung_json_all.rds")
+coefficient_df = readRDS("testing_stuff/lung_sqrt_coefficients.rds")
+
+
+coefficient_df = dplyr::mutate(coefficient_df, cluster =
+                                 dplyr::case_when(
+                                   sqrt < 29800000 ~ 1,
+                                   dplyr::between(sqrt, 29802000, 29802600) ~ 2,
+                                   sqrt > 29802600 ~ 3
+                                 ))
+
+assigned_data = assigned_data[coefficient_df$sample]
+
+grouped_data = split(assigned_data, coefficient_df$cluster)
+
+freq_sd = sd_by_group(grouped_data)
+
+sd_mode = calculate_mode(freq_sd$sd) * 2
+
+classified_emfs = import_emf_classifications("testing_stuff/all_emfs_2020-01-27_classified.json")
+lipid_df = weight_lipid_classifications(classified_emfs, lipid_weight = 2, not_lipid_weight = 2)
+assigned_data = purrr::map(assigned_data, function(in_data){
+  score_filter_assignments(in_data, filter_conditions = e_value <= 0.5,
+                           emf_weight = lipid_df)
+})
+
+grouped_data2 = split(assigned_data, coefficient_df$cluster)
+
+grouped_mz = grouped_mz_after_freq(grouped_data2, sd_mode)
+
+ggplot(dplyr::filter(grouped_mz, Value <= 0.1), aes(x = Index, y = Value)) + geom_point() + facet_wrap(~ set, ncol = 1)
+
+ggplot(dplyr::filter(grouped_mz, Value <= 0.1), aes(x = Index, y = Value, color = as.factor(set))) + geom_point(alpha = 0.5)
+
+grouped_mz = dplyr::filter(grouped_mz, Value <= 0.1)
+
+mz_cutoff = fit_predict_mz_cutoff(grouped_mz)
+
+all_vote = extract_assigned_data(assigned_data, difference_cutoff = mz_cutoff,
+                                 difference_measure = "ObservedMZ", progress = TRUE)
