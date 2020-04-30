@@ -11,6 +11,9 @@ sd_by_group(grouped_samples, ...)
 
 \item{...}{parameters for \code{find_confident_frequency_sd}}
 }
+\value{
+data.frame
+}
 \description{
 Assuming you have some criteria by which you have split samples into a list,
 and now you want to calculate the IMF frequency SD for each one independently.
