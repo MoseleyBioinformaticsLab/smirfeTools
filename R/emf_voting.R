@@ -1000,7 +1000,7 @@ extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = O
       scan_level_location = purrr::map(seq(1, nrow(all_peaks)), function(in_row){
         row_peaks = all_peaks[in_row, ]
         row_peaks = row_peaks[!is.na(row_peaks)]
-        unlist(scan_location[row_peaks], use.names = FALSE)
+        do.call(rbind, scan_location[row_peaks])
       })
       names(scan_level_location) = rownames(all_peaks)
 
