@@ -849,8 +849,8 @@ add_location_intensity = function(emfs, peak_data, location = ObservedMZ,
 #' @export
 #'
 extract_imf_emf_data = function(extracted_emfs, intensity = Height, location = ObservedMZ, by = "EMF", scanlevel = FALSE){
-  location_var = rlang::quo_name(enquo(location))
-  intensity_var = rlang::quo_name(enquo(intensity))
+  location_var = rlang::quo_name(rlang::enquo(location))
+  intensity_var = rlang::quo_name(rlang::enquo(intensity))
   #message(location_var)
   #message(intensity_var)
 
