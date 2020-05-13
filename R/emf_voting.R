@@ -380,6 +380,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 #' to EMF peaks in natural abundance order.
 #'
 #' @param grouped_emfs list of grouped EMFs
+#' @param scan_level_location scan level location of peaks as a list
 #' @param peak_location data.frame of peak locations
 #' @param difference_cutoff how close do peaks need to be to each other
 #' @param keep_ratio how close to the maximum voted EMF to keep other things? (default is 0.9)
@@ -387,7 +388,7 @@ match_imf_by_difference = function(imf_2_peak, unknown_peaks, scan_locations, pe
 #'
 #' @return data.frame
 #' @export
-choose_emf = function(grouped_emfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9, sudo_EMF = NULL){
+choose_emf = function(grouped_emfs, scan_level_location = NULL, peak_location, difference_cutoff, keep_ratio = 0.9, sudo_EMF = NULL){
   all_emf_info = purrr::map_df(grouped_emfs, ~ .x)
   grouped_scores = unique(all_emf_info[, c("complete_EMF", "grouped_EMF", "voting_score", "type")])
 
@@ -551,10 +552,17 @@ check_emf = function(in_emf, peak_location, difference_cutoff){
 #' @param peak_location the data.frame of peak_location
 #' @param difference_cutoff tolerance for matched peaks for `choose_emf`
 #' @param keep_ratio for `choose_emf`
+#' @param min_gemfs minimum number of grouped EMFs for each sudo EMF
 #'
 #' @return list of sudo EMFs after voting
 #' @export
-remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
+remove_duplicates_across_semfs = function(chosen_emfs,
+                                          all_gemfs,
+                                          scan_level_location,
+                                          peak_location,
+                                          difference_cutoff,
+                                          keep_ratio = 0.9,
+                                          min_gemfs = 1){
   peak_2_voted_emf = purrr::map_dfr(chosen_emfs, ~ unique(.x[, c("Sample_Peak", "sudo_EMF")]))
 
   dup_peaks = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
@@ -583,8 +591,10 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
 
   })
 
-  dedup_null = purrr::map_lgl(chosen_emfs_dedup, is.null)
-  out_emfs = c(non_dup_chosen, chosen_emfs_dedup[!dedup_null])
+  chosen_emfs_dedup = purrr::map(chosen_emfs_dedup, check_ngemf, min_gemfs)
+  keep_dedup = !purrr::map_lgl(chosen_emfs_dedup, is.null)
+
+  out_emfs = c(non_dup_chosen, chosen_emfs_dedup[keep_dedup])
   out_emfs = purrr::map(seq(1, length(out_emfs)), function(.x){
     tmp_emf = out_emfs[[.x]]
     tmp_emf$sudo_EMF = paste0("SEMF_", .x)
@@ -606,13 +616,21 @@ remove_duplicates_across_semfs = function(chosen_emfs, all_gemfs, scan_level_loc
 #'
 #' @param chosen_emfs sudo EMFs from `choose_emf`
 #' @param all_gemfs the grouped_EMFs
-#' @param peak_location frequency information for each and every peak
+#' @param scan_level_location locations of every peak in every scan as a list
+#' @param peak_location location information for each and every peak
 #' @param difference_cutoff how close do peaks need to be to each other
 #' @param keep_ratio the ratio used to keep other highly voted EMFs
+#' @param min_gemfs the minimum number of grouped emfs to keep a sudo EMF
 #'
 #' @return list
 #' @export
-merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio = 0.9){
+merge_duplicate_semfs = function(chosen_emfs,
+                                 all_gemfs,
+                                 scan_level_location = NULL,
+                                 peak_location,
+                                 difference_cutoff,
+                                 keep_ratio = 0.9,
+                                 min_gemfs = 1){
   peak_2_voted_emf = purrr::map_dfr(chosen_emfs, ~ unique(.x[, c("Sample_Peak", "sudo_EMF")]))
 
   dup_peak_id = unique(peak_2_voted_emf$Sample_Peak[duplicated(peak_2_voted_emf$Sample_Peak)])
@@ -655,6 +673,9 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, pe
   chosen_duplicates = internal_map$map_function(merged_gemfs, function(.x){
     choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, keep_ratio)
   })
+  chosen_duplicates = purrr::map(chosen_duplicates, check_ngemf, min_gemfs)
+  keep_dup = !purrr::map_lgl(chosen_duplicates, is.null)
+  chosen_duplicates = chosen_duplicates[keep_dup]
 
   all_chosen_emfs = c(chosen_nondup, chosen_duplicates)
   all_chosen_emfs = purrr::map(seq(1, length(all_chosen_emfs)), function(.x){
@@ -665,7 +686,7 @@ merge_duplicate_semfs = function(chosen_emfs, all_gemfs, scan_level_location, pe
   })
   names(all_chosen_emfs) = paste0("SEMF_", seq(1, length(all_chosen_emfs)))
 
-  remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio)
+  remove_duplicates_across_semfs(all_chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, keep_ratio, min_gemfs)
 
 }
 

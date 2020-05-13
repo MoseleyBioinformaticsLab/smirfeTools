@@ -10,3 +10,16 @@ na_dataframe = function(template_dataframe){
   rownames(na_df) = NULL
   na_df
 }
+
+check_ngemf = function(in_emf, min_emfs = 2){
+  if (!is.null(in_emf)) {
+    n_gemf = length(unique(in_emf$grouped_EMF))
+    if (n_gemf >= min_emfs) {
+      return(in_emf)
+    } else {
+      return(NULL)
+    }
+  } else {
+    return(NULL)
+  }
+}

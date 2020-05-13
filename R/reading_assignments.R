@@ -248,6 +248,7 @@ extract_assigned_data <- function(assigned_data,
                                   chosen_keep_ratio = 0.9,
                                   difference_cutoff = NULL,
                                   difference_measure = "ObservedFrequency",
+                                  min_emfs = 2,
                                   use_scan_level = TRUE,
                                   progress = TRUE){
 
@@ -315,6 +316,11 @@ extract_assigned_data <- function(assigned_data,
   log_message("Creating pseudo EMFs across cliques ...")
   log_memory()
   sudo_emf_list = create_sudo_emfs(all_gemf_emf_mapping)
+
+  sudo_emf_list = purrr::map(sudo_emf_list, check_ngemf, min_emfs)
+  keep_sudo = !purrr::map_lgl(sudo_emf_list, is.null)
+  sudo_emf_list = sudo_emf_list[keep_sudo]
+
   # next things:
   all_gemfs = unlist(within_sample_emfs, recursive = FALSE, use.names = FALSE)
   names(all_gemfs) = purrr::map_chr(all_gemfs, ~ .x$grouped_EMF[1])
@@ -344,8 +350,9 @@ extract_assigned_data <- function(assigned_data,
     choose_emf(all_gemfs[unique(.x$grouped_EMF)], scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio, .x$sudo_EMF[1])
   })
   names(chosen_emfs) = names(sudo_emf_list)
-  null_chosen = purrr::map_lgl(chosen_emfs, ~ nrow(.x) == 0)
-  chosen_emfs = chosen_emfs[!null_chosen]
+  chosen_emfs = purrr::map(chosen_emfs, check_ngemf, min_emfs)
+  keep_chosen = !purrr::map_lgl(chosen_emfs, is.null)
+  chosen_emfs = chosen_emfs[keep_chosen]
 
   n_chosen = length(chosen_emfs)
 
@@ -360,7 +367,7 @@ extract_assigned_data <- function(assigned_data,
     message("Merging chosen EMFs ...")
   }
   log_message("Merging chosen EMFs ...")
-  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio)
+  merged_chosen_emfs = merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location, peak_location, difference_cutoff, chosen_keep_ratio, min_emfs)
   # next is to actually extract the right data. But up to here, everything appears OK.
   #
   null_chosen2 = purrr::map_lgl(merged_chosen_emfs, ~ nrow(.x) == 0)
