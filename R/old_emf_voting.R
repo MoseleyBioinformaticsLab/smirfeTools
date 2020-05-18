@@ -222,6 +222,18 @@ old_extract_imf_emf_data = function(emfs, by = "EMF"){
       semf_info
     }) %>% purrr::flatten()
 
+    all_peaks = purrr::map2(all_compared, names(all_compared), function(in_semf, semf_id){
+      semf_peaks = purrr::map2(in_semf, names(in_semf), function(in_emf, emf_id){
+        peak_id = paste0(semf_id, ".", emf_id, ".", names(in_emf$info))
+        out_peaks = in_emf$peaks
+        rownames(out_peaks) = peak_id
+        out_peaks
+      })
+      names(semf_peaks) = paste0(semf_id, ".", names(in_semf))
+      semf_peaks
+
+    }) %>% purrr::flatten()
+
   } else {
     all_intensity = purrr::map2(all_compared, names(all_compared), function(.x, .y){
       peak_id = paste0(.y,".", names(.x$info))
@@ -251,6 +263,7 @@ old_extract_imf_emf_data = function(emfs, by = "EMF"){
   }
   return(list(intensity = all_intensity,
               location = all_location,
+              peaks = all_peaks,
               info = all_info))
 }
 
@@ -263,15 +276,19 @@ old_compare_extract_emfs = function(emf, by = "EMF"){
 
     out_intensity = compare_intensity[single_index$row_index, , drop = FALSE]
     out_location = compare_location[single_index$row_index, , drop = FALSE]
+    out_peaks = compare_peaks[single_index$row_index, , drop = FALSE]
 
     out_info = purrr::map(split_groups, ~ compare_info[.x$row_index, ])
 
-    list(intensity = out_intensity, location = out_location, info = out_info)
+
+    list(intensity = out_intensity, location = out_location, info = out_info,
+         peaks = out_peaks)
   }
 
   compare_intensity = purrr::map(emf, ~ .x$intensity) %>% do.call(rbind, .)
   compare_info = purrr::map_df(emf, ~ .x$peak_info)
   compare_location = purrr::map(emf, ~ .x$location) %>% do.call(rbind, .)
+  compare_peaks = purrr::map(emf, ~ .x$corresponded_matrix) %>% do.call(rbind, .)
 
   group_imfs = vector("integer", length = nrow(compare_intensity))
 
