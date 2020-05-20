@@ -667,6 +667,7 @@ merge_duplicate_semfs = function(chosen_emfs,
   }
   keep_semfs = !duplicated(index_semfs)
   merged_gemfs = purrr::map(dup_semfs_gemfs[keep_semfs], ~ data.frame(grouped_EMF = .x, stringsAsFactors = FALSE))
+  merged_gemfs = unique(merged_gemfs)
   dup_semfs = use_semfs
 
   chosen_nondup = chosen_emfs[!(names(chosen_emfs) %in% use_semfs)]
