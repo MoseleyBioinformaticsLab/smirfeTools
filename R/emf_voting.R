@@ -1,3 +1,9 @@
+find_voting_score = function(clique_size, score){
+  use_clique = clique_size == max(clique_size)
+  max(score)
+}
+
+
 #' extract sample level elemental molecular formulas
 #'
 #' given the assignment data.frame, group and extract EMF level information
@@ -24,7 +30,7 @@ get_sample_emfs = function(sample_assignments, sample_id, evalue_cutoff = 0.98, 
   sample_assignments = dplyr::left_join(sample_assignments, grouped_peaks, by = "complete_EMF")
   sample_assignments$gc = paste0(sample_assignments$grouped_EMF, sample_assignments$complete_EMF)
   grouped_assignments = dplyr::group_by(sample_assignments, grouped_EMF, complete_EMF)
-  grouped_scores = dplyr::summarise(grouped_assignments, gc = gc[1], voting_score = score[which.max(clique_size)[1]],
+  grouped_scores = dplyr::summarise(grouped_assignments, gc = gc[1], voting_score = find_voting_score(clique_size, score),
                                     type = "primary")
   sample_assignments = dplyr::left_join(sample_assignments, grouped_scores[, c("gc", "voting_score", "type")], by = "gc")
 
