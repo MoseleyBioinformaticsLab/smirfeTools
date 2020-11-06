@@ -80,6 +80,7 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
 #'
 #' @param smirfe_assignment the set of assignment results
 #' @param assigned_only whether to return peaks with assignment only
+#' @param sample_id a user provided sample id to override what is in the metadata
 #' @param .pb a progress bar object
 #'
 #' @importFrom jsonlite fromJSON
@@ -87,14 +88,16 @@ score_filter_assignments = function(assignments, score_calculation = 1 - e_value
 #' @return list of tic, assignments, sample
 #' @export
 #'
-read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, .pb = NULL){
+read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, sample_id = NULL, .pb = NULL){
   log_memory()
   if (!is.null(.pb)) {
     knitrProgressBar::update_progress(.pb)
   }
   tmp_list <- jsonlite::fromJSON(smirfe_assignment, simplifyVector = FALSE)
-  if (is.null(tmp_list$Sample)) {
+  if (is.null(tmp_list$Sample) && is.null(other_sample)) {
     sample <- gsub(".json.output", "", basename(smirfe_assignment))
+  } else if (!is.null(sample_id)) {
+    sample = sample_id
   } else {
     sample <- tmp_list$Sample
   }
