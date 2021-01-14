@@ -260,6 +260,7 @@ old_extract_imf_emf_data = function(emfs, by = "EMF"){
       })
       info_df
     })
+    all_peaks = NULL
   }
   return(list(intensity = all_intensity,
               location = all_location,
