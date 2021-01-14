@@ -4,8 +4,11 @@
 \alias{create_sudo_peaks}
 \title{create pseudo peak}
 \usage{
-create_sudo_peaks(in_assignments, sample_peak = "Sample_Peak",
-  imf = "complete_IMF")
+create_sudo_peaks(
+  in_assignments,
+  sample_peak = "Sample_Peak",
+  imf = "complete_IMF"
+)
 }
 \arguments{
 \item{in_assignments}{the table of all assignments from all samples}

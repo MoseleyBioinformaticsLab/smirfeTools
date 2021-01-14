@@ -4,11 +4,19 @@
 \alias{choose_emf}
 \title{choose most likely elemental molecular formula's}
 \usage{
-choose_emf(grouped_emfs, scan_level_location, peak_location,
-  difference_cutoff, keep_ratio = 0.9, sudo_EMF = NULL)
+choose_emf(
+  grouped_emfs,
+  scan_level_location = NULL,
+  peak_location,
+  difference_cutoff,
+  keep_ratio = 0.9,
+  sudo_EMF = NULL
+)
 }
 \arguments{
 \item{grouped_emfs}{list of grouped EMFs}
+
+\item{scan_level_location}{scan level location of peaks as a list}
 
 \item{peak_location}{data.frame of peak locations}
 

@@ -4,8 +4,15 @@
 \alias{remove_duplicates_across_semfs}
 \title{remove duplicate peaks across sudo EMFs}
 \usage{
-remove_duplicates_across_semfs(chosen_emfs, all_gemfs, scan_level_location,
-  peak_location, difference_cutoff, keep_ratio = 0.9)
+remove_duplicates_across_semfs(
+  chosen_emfs,
+  all_gemfs,
+  scan_level_location,
+  peak_location,
+  difference_cutoff,
+  keep_ratio = 0.9,
+  min_gemfs = 1
+)
 }
 \arguments{
 \item{chosen_emfs}{merged EMFs}
@@ -17,6 +24,8 @@ remove_duplicates_across_semfs(chosen_emfs, all_gemfs, scan_level_location,
 \item{difference_cutoff}{tolerance for matched peaks for \code{choose_emf}}
 
 \item{keep_ratio}{for \code{choose_emf}}
+
+\item{min_gemfs}{minimum number of grouped EMFs for each sudo EMF}
 }
 \value{
 list of sudo EMFs after voting

@@ -4,8 +4,12 @@
 \alias{add_location_intensity}
 \title{add peak location and intensity}
 \usage{
-add_location_intensity(emfs, peak_data, location = ObservedMZ,
-  intensity = Height)
+add_location_intensity(
+  emfs,
+  peak_data,
+  location = ObservedMZ,
+  intensity = Height
+)
 }
 \arguments{
 \item{emfs}{list of EMFs}

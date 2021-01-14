@@ -4,13 +4,19 @@
 \alias{read_smirfe_assignment}
 \title{read SMIRFE assignments}
 \usage{
-read_smirfe_assignment(smirfe_assignment, assigned_only = TRUE,
-  .pb = NULL)
+read_smirfe_assignment(
+  smirfe_assignment,
+  assigned_only = TRUE,
+  sample_id = NULL,
+  .pb = NULL
+)
 }
 \arguments{
 \item{smirfe_assignment}{the set of assignment results}
 
 \item{assigned_only}{whether to return peaks with assignment only}
+
+\item{sample_id}{a user provided sample id to override what is in the metadata}
 
 \item{.pb}{a progress bar object}
 }

@@ -4,8 +4,12 @@
 \alias{get_emf_intensity_sums}
 \title{Get EMF sums}
 \usage{
-get_emf_intensity_sums(split_emfs, feature_intensities, feature_location,
-  multiply_C13 = FALSE)
+get_emf_intensity_sums(
+  split_emfs,
+  feature_intensities,
+  feature_location,
+  multiply_C13 = FALSE
+)
 }
 \arguments{
 \item{split_emfs}{list of EMF data.frames}

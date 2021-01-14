@@ -4,9 +4,14 @@
 \alias{choose_imfs}
 \title{decide on IMFs}
 \usage{
-choose_imfs(assignment_data, sample_peak = "Sample_Peak",
-  imf = "complete_IMF", sample = "Sample", e_value = "e_value",
-  data_col = "Assignment_Data")
+choose_imfs(
+  assignment_data,
+  sample_peak = "Sample_Peak",
+  imf = "complete_IMF",
+  sample = "Sample",
+  e_value = "e_value",
+  data_col = "Assignment_Data"
+)
 }
 \arguments{
 \item{assignment_data}{data.frame of assignment data}

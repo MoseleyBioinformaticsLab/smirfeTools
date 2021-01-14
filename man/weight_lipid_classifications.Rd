@@ -4,8 +4,13 @@
 \alias{weight_lipid_classifications}
 \title{create lipids of interest}
 \usage{
-weight_lipid_classifications(lipid_classification, lipid_weight = 1,
-  not_lipid_weight = 1, other_weight = 1, all_emfs = NULL)
+weight_lipid_classifications(
+  lipid_classification,
+  lipid_weight = 1,
+  not_lipid_weight = 1,
+  other_weight = 1,
+  all_emfs = NULL
+)
 }
 \arguments{
 \item{lipid_classification}{data.frame of lipid classifications}

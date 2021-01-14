@@ -4,8 +4,13 @@
 \alias{extract_imf_emf_data}
 \title{extract IMF or EMF level data}
 \usage{
-extract_imf_emf_data(extracted_emfs, intensity = Height,
-  location = ObservedMZ, by = "EMF", scanlevel = FALSE)
+extract_imf_emf_data(
+  extracted_emfs,
+  intensity = Height,
+  location = ObservedMZ,
+  by = "EMF",
+  scanlevel = FALSE
+)
 }
 \arguments{
 \item{extracted_emfs}{list of data from \code{extract_assigned_data}}

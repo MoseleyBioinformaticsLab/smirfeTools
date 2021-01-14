@@ -4,9 +4,13 @@
 \alias{get_assigned_peak_info}
 \title{peak mz, height, assignments}
 \usage{
-get_assigned_peak_info(peak_list, variables = c("ObservedMZ", "Height"),
-  summaries = "Mean", include_non_primary = TRUE,
-  keep_peaks = "assignments")
+get_assigned_peak_info(
+  peak_list,
+  variables = c("ObservedMZ", "Height"),
+  summaries = "Mean",
+  include_non_primary = TRUE,
+  keep_peaks = "assignments"
+)
 }
 \arguments{
 \item{peak_list}{the peak list from reading some JSON}

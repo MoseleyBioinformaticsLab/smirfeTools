@@ -4,28 +4,35 @@
 \alias{merge_duplicate_semfs}
 \title{merge sudo EMFs with duplicate peaks}
 \usage{
-merge_duplicate_semfs(chosen_emfs, all_gemfs, scan_level_location,
-  peak_location, difference_cutoff, keep_ratio = 0.9)
+merge_duplicate_semfs(
+  chosen_emfs,
+  all_gemfs,
+  scan_level_location = NULL,
+  peak_location,
+  difference_cutoff,
+  keep_ratio = 0.9,
+  min_gemfs = 1
+)
 }
 \arguments{
 \item{chosen_emfs}{sudo EMFs from \code{choose_emf}}
 
 \item{all_gemfs}{the grouped_EMFs}
 
-\item{peak_location}{frequency information for each and every peak}
+\item{scan_level_location}{locations of every peak in every scan as a list}
+
+\item{peak_location}{location information for each and every peak}
 
 \item{difference_cutoff}{how close do peaks need to be to each other}
 
 \item{keep_ratio}{the ratio used to keep other highly voted EMFs}
+
+\item{min_gemfs}{the minimum number of grouped emfs to keep a sudo EMF}
 }
 \value{
 list
 }
 \description{
 After choosing EMFs, there may be sudo EMFs that share peaks. This is not kosher, there
-has to be a 1-1 mapping of peaks to sudo EMFs. This function merges those that share
-
-50% of peaks from either sudo EMF, and carries out voting again.
-After merging, it checks for duplicates again, and removes those peaks that still
-span multiple sudo EMFs, and then votes on them again.
+has to be a 1-1 mapping of peaks to sudo EMFs. This function merges those that share50\% of peaks from either sudo EMF, and carries out voting again.After merging, it checks for duplicates again, and removes those peaks that stillspan multiple sudo EMFs, and then votes on them again.
 }

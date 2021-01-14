@@ -4,8 +4,12 @@
 \alias{find_confident_frequency_sd}
 \title{find confident frequency sd}
 \usage{
-find_confident_frequency_sd(assigned_data, low_evalue_cutoff = 0.1,
-  low_mz_cutoff = 600, remove_elements = "S")
+find_confident_frequency_sd(
+  assigned_data,
+  low_evalue_cutoff = 0.1,
+  low_mz_cutoff = 600,
+  remove_elements = "S"
+)
 }
 \arguments{
 \item{assigned_data}{list of assignment data}

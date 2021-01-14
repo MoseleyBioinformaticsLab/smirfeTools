@@ -4,16 +4,29 @@
 \alias{extract_assigned_data}
 \title{extract data}
 \usage{
-extract_assigned_data(assigned_data, emf_classifications = NULL,
-  sample_peak = "Sample_Peak", imf = "complete_IMF",
-  e_value = "e_value", evalue_cutoff = 0.5, emf = "complete_EMF",
-  sample = "Sample", mz_diff = "mass_error",
-  data_col = "Assignment_Data", numeric_values = c("e_value",
-  "mass_error", "NAP", "lbl.count", "clique_size"),
-  observed_mz = "ObservedMZ", observed_frequency = "ObservedFrequency",
-  height = "Height", remove_elements = "S", chosen_keep_ratio = 0.9,
-  difference_cutoff = NULL, difference_measure = "ObservedFrequency",
-  use_scan_level = TRUE, progress = TRUE)
+extract_assigned_data(
+  assigned_data,
+  emf_classifications = NULL,
+  sample_peak = "Sample_Peak",
+  imf = "complete_IMF",
+  e_value = "e_value",
+  evalue_cutoff = 0.5,
+  emf = "complete_EMF",
+  sample = "Sample",
+  mz_diff = "mass_error",
+  data_col = "Assignment_Data",
+  numeric_values = c("e_value", "mass_error", "NAP", "lbl.count", "clique_size"),
+  observed_mz = "ObservedMZ",
+  observed_frequency = "ObservedFrequency",
+  height = "Height",
+  remove_elements = "S",
+  chosen_keep_ratio = 0.9,
+  difference_cutoff = NULL,
+  difference_measure = "ObservedFrequency",
+  min_emfs = 2,
+  use_scan_level = TRUE,
+  progress = TRUE
+)
 }
 \arguments{
 \item{assigned_data}{a list of assignments created from \code{read_smirfe_assignments}}

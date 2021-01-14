@@ -4,8 +4,11 @@
 \alias{create_mz_diffs}
 \title{create M/Z differences}
 \usage{
-create_mz_diffs(coefficient_info, frequency_offset = NULL,
-  mz_values = seq(150, 1600, 0.5))
+create_mz_diffs(
+  coefficient_info,
+  frequency_offset = NULL,
+  mz_values = seq(150, 1600, 0.5)
+)
 }
 \arguments{
 \item{coefficient_info}{list of coefficients from \code{get_sample_coefficients}}

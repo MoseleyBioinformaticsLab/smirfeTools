@@ -4,10 +4,16 @@
 \alias{score_filter_assignments}
 \title{score and filter assignments}
 \usage{
-score_filter_assignments(assignments, score_calculation = 1 - e_value,
-  score_weight = 1, filter_conditions = ObservedMZ <= 1600,
-  high_correlation = 0.5, emf_weight = NULL, remove_highsd = TRUE,
-  remove_contaminants = TRUE)
+score_filter_assignments(
+  assignments,
+  score_calculation = 1 - e_value,
+  score_weight = 1,
+  filter_conditions = ObservedMZ <= 1600,
+  high_correlation = 0.5,
+  emf_weight = NULL,
+  remove_highsd = TRUE,
+  remove_contaminants = TRUE
+)
 }
 \arguments{
 \item{assignments}{a character or list object}

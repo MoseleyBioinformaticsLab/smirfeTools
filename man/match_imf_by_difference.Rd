@@ -4,8 +4,13 @@
 \alias{match_imf_by_difference}
 \title{match peaks to IMFs by difference}
 \usage{
-match_imf_by_difference(imf_2_peak, unknown_peaks, scan_locations,
-  peak_location, difference_cutoff)
+match_imf_by_difference(
+  imf_2_peak,
+  unknown_peaks,
+  scan_locations,
+  peak_location,
+  difference_cutoff
+)
 }
 \arguments{
 \item{imf_2_peak}{data.frame with IMF information (see details)}
