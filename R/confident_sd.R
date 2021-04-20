@@ -163,12 +163,12 @@ create_mz_diffs = function(coefficient_info, frequency_offset = NULL, mz_values 
   freq_description = coefficient_info[[1]]$coefficients$frequency_fit_description
   mz_description = coefficient_info[[1]]$coefficients$mz_fit_description
 
-  mz_2_freq = FTMS.peakCharacterization:::predict_exponentials(mz_values, freq_coefficients, freq_description)
+  mz_2_freq = predict_exponentials(mz_values, freq_coefficients, freq_description)
 
   frequency_diff = mz_2_freq + frequency_offset
 
-  mz_init = FTMS.peakCharacterization:::predict_exponentials(mz_2_freq, mz_coefficients, mz_description)
-  mz_shift = FTMS.peakCharacterization:::predict_exponentials(frequency_diff, mz_coefficients, mz_description)
+  mz_init = predict_exponentials(mz_2_freq, mz_coefficients, mz_description)
+  mz_shift = predict_exponentials(frequency_diff, mz_coefficients, mz_description)
   mz_diff = abs(mz_shift - mz_init)
 
   data.frame(Index = mz_values, Value = mz_diff)
