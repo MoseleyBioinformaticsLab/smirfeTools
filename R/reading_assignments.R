@@ -94,7 +94,7 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, samp
     knitrProgressBar::update_progress(.pb)
   }
   tmp_list <- jsonlite::fromJSON(smirfe_assignment, simplifyVector = FALSE)
-  if (is.null(tmp_list$Sample) && is.null(other_sample)) {
+  if (is.null(tmp_list$Sample) && is.null(sample_id)) {
     sample <- gsub(".json.output", "", basename(smirfe_assignment))
   } else if (!is.null(sample_id)) {
     sample = sample_id
@@ -102,19 +102,90 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, samp
     sample <- tmp_list$Sample
   }
 
-  n_peaks = length(tmp_list$Peaks)
+  if (!is.null(tmp_list[["Peaks"]])) {
+    out_data = parse_smirfe_v1(tmp_list, sample = sample, assigned_only = assigned_only)
+  } else {
+    out_data = parse_smirfe_v2(tmp_list, sample)
+  }
+  out_data
+}
+
+parse_smirfe_v2 = function(json_list, sample){
+  # tmp_list = jsonlite::fromJSON("~/Projects/work/SMIRFE2_assignments/filtersd_1ecf.assignments_nosnac_nap.json", simplifyVector = FALSE)
+  # json_list = tmp_list
+  imf_assignments = internal_map$map_function(json_list, extract_single_assignment_v2)
+  imf_assignment_df = dplyr::bind_rows(imf_assignments)
+  imf_assignment_df$Sample = sample
+  imf_assignment_df$Sample_Peak = paste0(sample, "_", imf_assignment_df$PeakID)
+  list(assignments = imf_assignment_df,
+       sample = sample_id)
+}
+
+extract_single_assignment_v2 = function(single_entry){
+  scores = get_clique_scores_v2(single_entry$IMF_clique_scores)
+  peaks = get_imf_to_peaks_v2(single_entry$IMF_to_peak_map)
+  nap = get_imf_nap_v2(single_entry$IMF_NAP)
+  emf_data = tibble::tibble(isotopologue_EMF = single_entry$EMF, adduct_EMF = single_entry$Adduct, complete_IMF = peaks$complete_IMF)
+  emf_data$complete_EMF = paste0(emf_data$isotopologue_EMF, emf_data$adduct_EMF)
+
+  iso_adduct = get_iso_imf_v2(emf_data$complete_IMF)
+  label_info = get_label_count_v2(single_entry$EMF_lbl, nrow(emf_data))
+  emf_data = dplyr::bind_cols(emf_data, label_info)
+  out_df = dplyr::left_join(emf_data, scores, by = "complete_IMF")
+  out_df = dplyr::left_join(out_df, nap, by = "complete_IMF")
+  out_df = dplyr::left_join(out_df, peaks, by = "complete_IMF")
+  out_df = dplyr::left_join(out_df, iso_adduct, by = "complete_IMF")
+
+}
+
+get_label_count_v2 = function(emf_lbl, n_rows){
+  tibble::tibble(lbl.type = rep(names(emf_lbl), n_rows),
+                 lbl.count = rep(emf_lbl[[1]], n_rows))
+}
+
+get_iso_imf_v2 = function(complete_IMF){
+  iso_adduct_charge_pattern = "\\[.*\\]\\."
+  isotopologue_IMF = stringr::str_replace(complete_IMF, iso_adduct_charge_pattern, "")
+  adduct_charge = stringr::str_extract(complete_IMF, iso_adduct_charge_pattern)
+  adduct_charge = adduct_charge %>%
+    stringr::str_replace("\\.", "")
+  tibble::tibble(complete_IMF = complete_IMF,
+                 isotopologue_IMF = isotopologue_IMF,
+                 adduct_IMF = adduct_charge)
+}
+
+get_imf_nap_v2 = function(nap_values){
+  tibble::tibble(complete_IMF = names(nap_values),
+                 NAP = purrr::map_dbl(nap_values, ~ .x))
+}
+
+get_clique_scores_v2 = function(clique_scores){
+  tibble::tibble(complete_IMF = names(clique_scores),
+                 clique_size = purrr::map_int(clique_scores, "clique_size"),
+                 e_value = purrr::map_dbl(clique_scores, "e_value"))
+}
+
+get_imf_to_peaks_v2 = function(imf_2_peak){
+  tibble::tibble(complete_IMF = names(imf_2_peak),
+                 ObservedMZ = purrr::map_dbl(imf_2_peak, "observed_mz"),
+                 Height = purrr::map_dbl(imf_2_peak, "intensity"),
+                 PeakID = purrr::map_dbl(imf_2_peak, "peak_id"))
+}
+
+parse_smirfe_v1 = function(json_list, sample, assigned_only){
+  n_peaks = length(json_list$Peaks)
 
   if (!assigned_only) {
-    to_extract = rep(TRUE, length(tmp_list$Peaks))
+    to_extract = rep(TRUE, length(json_list$Peaks))
   } else {
-    to_extract <- purrr::map_lgl(tmp_list$Peaks, function(x){length(x$Assignments) > 0})
+    to_extract <- purrr::map_lgl(json_list$Peaks, function(x){length(x$Assignments) > 0})
   }
   n_extract = sum(to_extract)
 
   #tictoc::tic()
   extract_list = which(to_extract)
   extract_list = sample(extract_list, length(extract_list))
-  peak_info <- internal_map$map_function(tmp_list$Peaks[extract_list], extract_peak_data)
+  peak_info <- internal_map$map_function(json_list$Peaks[extract_list], extract_peak_data)
   #tictoc::toc()
   peak_data <- purrr::map_dfr(peak_info, "peak_data")
 
@@ -128,22 +199,22 @@ read_smirfe_assignment <- function(smirfe_assignment, assigned_only = TRUE, samp
 
   peak_assignments = dplyr::left_join(peak_assignments, peak_data[, c("PeakID", "ObservedMZ")], by = "PeakID")
 
-  peak_id = paste0(sample, "_", unlist(tmp_list$ScanLevel$PeakID))
+  peak_id = paste0(sample, "_", unlist(json_list$ScanLevel$PeakID))
   keep_peaks = unique(peak_assignments$Sample_Peak)
   ideal_scanlevel = c("CorrectedLog10Height", "Log10Height",
                       "ObservedFrequency", "ObservedMZ")
-  grab_scanlevel = ideal_scanlevel[ideal_scanlevel %in% names(tmp_list$ScanLevel)]
-  scan_level_lists = purrr::map(tmp_list$ScanLevel[grab_scanlevel],
-                                   function(in_matrix){
-                                     tmp_list = purrr::map(in_matrix, ~ suppressWarnings(as.numeric(unlist(.x))))
-                                     #tmp_matrix = do.call(rbind, tmp_list)
-                                     names(tmp_list) = peak_id
+  grab_scanlevel = ideal_scanlevel[ideal_scanlevel %in% names(json_list$ScanLevel)]
+  scan_level_lists = purrr::map(json_list$ScanLevel[grab_scanlevel],
+                                function(in_matrix){
+                                  json_list = purrr::map(in_matrix, ~ suppressWarnings(as.numeric(unlist(.x))))
+                                  #tmp_matrix = do.call(rbind, json_list)
+                                  names(json_list) = peak_id
 
-                                     tmp_list[keep_peaks]
-                                   })
+                                  json_list[keep_peaks]
+                                })
   log_memory()
 
-  list(tic = tmp_list$TIC,
+  list(tic = json_list$TIC,
        assignments = peak_assignments,
        data = peak_data,
        scan_level = scan_level_lists,

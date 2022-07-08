@@ -24,7 +24,7 @@ find_confident_frequency_sd = function(assigned_data,
 
   confident_emfs = purrr::map(assigned_data, function(in_assign){
     assignments = in_assign$assignments
-    #message(paste0(in_assign, "  ", .x$sample))
+    message(in_assign$sample)
     low_e_mz = dplyr::filter(assignments, (e_value <= low_evalue_cutoff) &
                                (ObservedMZ <= low_mz_cutoff) & (!grepl("S", complete_EMF)))
 
