@@ -118,10 +118,13 @@ parse_smirfe_v2 = function(json_list, sample){
   imf_assignment_df$Sample = sample
   imf_assignment_df$Sample_Peak = paste0(sample, "_", imf_assignment_df$PeakID)
   list(assignments = imf_assignment_df,
-       sample = sample_id)
+       sample = sample)
 }
 
 extract_single_assignment_v2 = function(single_entry){
+  # if (!is.null(single_entry[["id"]])) {
+  #   message(single_entry$id)
+  # }
   scores = get_clique_scores_v2(single_entry$IMF_clique_scores)
   peaks = get_imf_to_peaks_v2(single_entry$IMF_to_peak_map)
   nap = get_imf_nap_v2(single_entry$IMF_NAP)
@@ -139,8 +142,14 @@ extract_single_assignment_v2 = function(single_entry){
 }
 
 get_label_count_v2 = function(emf_lbl, n_rows){
-  tibble::tibble(lbl.type = rep(names(emf_lbl), n_rows),
-                 lbl.count = rep(emf_lbl[[1]], n_rows))
+  if (length(emf_lbl) > 0) {
+    out_label = tibble::tibble(lbl.type = rep(names(emf_lbl), n_rows),
+                   lbl.count = rep(emf_lbl[[1]], n_rows))
+  } else {
+    out_label = tibble::tibble(lbl.type = rep("", n_rows),
+                               lbl.count = rep(0, n_rows))
+  }
+  out_label
 }
 
 get_iso_imf_v2 = function(complete_IMF){
