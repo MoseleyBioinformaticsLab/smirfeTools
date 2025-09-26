@@ -34,5 +34,8 @@ list
 }
 \description{
 After choosing EMFs, there may be sudo EMFs that share peaks. This is not kosher, there
-has to be a 1-1 mapping of peaks to sudo EMFs. This function merges those that share50\% of peaks from either sudo EMF, and carries out voting again.After merging, it checks for duplicates again, and removes those peaks that stillspan multiple sudo EMFs, and then votes on them again.
+has to be a 1-1 mapping of peaks to sudo EMFs. This function merges those that share
+greater than 50\% of peaks from either sudo EMF, and carries out voting again.
+After merging, it checks for duplicates again, and removes those peaks that still
+span multiple sudo EMFs, and then votes on them again.
 }
